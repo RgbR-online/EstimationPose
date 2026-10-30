@@ -59,7 +59,8 @@ du commit du dépôt de documentation (`Programmation/`), les hach de code
 2. [`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md) —
    identifiants, niveaux, jalons, règles de progression, gabarit de note de passation.
 3. [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md) — le paquet à
-   exécuter : objectif, périmètre, livrables, critères de sortie.
+   exécuter : objectif, périmètre, livrables, critères de sortie ; sa section
+   « Organisation du dépôt `FromTo Github` » (§10) si la session crée ou déplace du code.
 4. Le document de référence détaillé de l'étape concernée
    (`Reference_Technique_Etape_<n>_*.md`), s'il existe.
 5. Les documents d'ingénierie cités par ce document d'étape, **uniquement** pour le point
@@ -76,15 +77,18 @@ que si la session porte explicitement sur une variante ou un historique.
 |---|---|---|---|
 | [`Suivi_Avancement.md`](./Suivi_Avancement.md) | Point d'entrée : état, ordre de lecture, carte | non (état) | **toujours, en premier** |
 | [`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md) | Niveaux, identifiants, jalons, règles de progression, gabarit de passation | **oui** | début de session |
-| [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md) | Référentiel technique global : objectifs, paquets, critères, renvois par étape | **oui** | pour le paquet à exécuter |
+| [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md) | Référentiel technique global : objectifs, paquets, critères, renvois par étape ; organisation du dépôt `FromTo Github` (§10) | **oui** | pour le paquet à exécuter ; §10 avant de créer ou déplacer du code |
 | [`Reference_Technique_Etape_1_Capteurs.md`](./Reference_Technique_Etape_1_Capteurs.md) | Détail de l'étape 1 + contrats d'interface (§7) + squelettes (Annexe C) | **oui** | toute session sur `1.x` |
-| [`Organisation_FromTo_Github.md`](./Organisation_FromTo_Github.md) | Dossiers et bibliothèques du dépôt `FromTo Github` | **oui** | avant de créer ou déplacer du code |
 | [`Annexe_Variantes_Et_Historique_Etape_1.md`](./Annexes/Annexe_Variantes_Et_Historique_Etape_1.md) | Variantes écartées et historique des décisions de l'étape 1 | **non — ne pas programmer dessus** | uniquement sur demande explicite |
 | [`Annexe_Variantes_Et_Historique_Globale.md`](./Annexes/Annexe_Variantes_Et_Historique_Globale.md) | Variantes écartées et historique du référentiel global | **non — ne pas programmer dessus** | uniquement sur demande explicite |
 | [`Annexe_Archive_Contrats_Interfaces.md`](./Annexes/Annexe_Archive_Contrats_Interfaces.md) | Archive allégée de l'ancien fichier de contrats (copie intégrale dans l'historique Git) | **non — ne pas programmer dessus** | uniquement pour traçabilité |
 
 Les trois fichiers `Annexe_*` sont regroupés dans le sous-dossier [`Annexes/`](./Annexes/) ;
 tous les renvois des documents normatifs pointent vers cet emplacement.
+
+L'organisation du dépôt `FromTo Github` (arborescence, rôles des dossiers, règles de
+dépendance, points de vigilance) fait partie du référentiel (§10) : elle se lit dans la
+même session que le paquet à exécuter, avant de créer ou de déplacer du code.
 
 Documents d'ingénierie (hors dossier, font autorité) : `Materiel.pdf`,
 `Implementation.pdf`, `Formulations_Kalman.pdf`, `Materiel/Datasheets/`,
@@ -142,8 +146,12 @@ n'existent pas encore : ils sont créés au démarrage du premier paquet de leur
 
 | Point | Détail | À traiter |
 |---|---|---|
-| Documents d'étape 2 à 6 | `Reference_Technique_Etape_2..6_*.md` non rédigés ; le référentiel global en tient lieu jusque-là, sa section d'étape étant réduite à l'objectif et au renvoi **à la création** de chaque document (référentiel §2.2, règle 7) | au démarrage de chaque étape (checklist : référentiel §2.1.1) |
-| `Organisation_FromTo_Github.md` | Références aux anciens noms de fichiers mises à jour le 2026-10-30 ; reste à réviser le fond : vocabulaire « feuille de route » résiduel (§1, §10) et préséance propre du document, à intégrer à la table unique (§6.2, « Préséance unique ») | autre session |
+| Documents d'étape 2 à 6 | `Reference_Technique_Etape_2..6_*.md` non rédigés ; le référentiel global en tient lieu jusque-là, sa section d'étape étant réduite à l'objectif et au renvoi **à la création** de chaque document (référentiel §2.2, règle 7) — y compris les blocs « Organisation du dépôt » des paquets concernés | au démarrage de chaque étape (checklist : référentiel §2.1.1) |
+
+> L'ancien `Organisation_FromTo_Github.md` a été fusionné dans le référentiel
+> (§10 et blocs « Organisation du dépôt » des paquets) ; sa dette de révision est soldée,
+> l'historique de la fusion est dans
+> [`Annexe_Variantes_Et_Historique_Globale.md`](./Annexes/Annexe_Variantes_Et_Historique_Globale.md).
 
 ### 6.2 Points non jugés
 
@@ -156,7 +164,7 @@ n'existent pas encore : ils sont créés au démarrage du premier paquet de leur
 | Destination des contrats d'interface (`Reference_Technique_Etape_1_Capteurs.md` §7 et Annexe C) | transfert de la spécification des types au document de l'étape 2 (l'étape 1 ne conservant que §7.1 et les renvois), ou conservation pérenne dans l'étape 1 | l'étape 2 doit pouvoir spécifier ses types sans dépendre du document d'une autre étape, et le paquet `1.2` doit figer ses logs sans attendre | `C1.3` (décision consignée dans la note de passation) |
 | Définition de « fini » de l'étape 1 par paquet (`Reference_Technique_Etape_1_Capteurs.md` §6) | marquer chaque critère de son paquet (`1.1`/`1.2`/`1.3`) et ajouter la correspondance `M0a–M4 ↔ C1.1/C1.2/C1.3`, ou laisser l'agrégat tel quel | aucun critère relevant de `C1.2` ne doit être exigé à `C1.1` | note de passation `C1.1` |
 | Destination des livrables du paquet `1.3` | jeux de données hors dépôt + catalogue versionné (p. ex. `test/fixtures/` et répertoire externe documenté) ; chemin du parseur unique ; emplacement du rapport de caractérisation ; support de consignation des σ (document du dépôt, pas `Formulations_Kalman.pdf`) | le paquet `2.1` doit pouvoir référencer ses entrées par un chemin unique (référentiel §2.2, règle 4) | `C1.3` |
-| Préséance unique entre documents | une seule table (dans `Planification` §1 ou `Suivi` §3) incluant `Organisation_FromTo_Github.md` et les documents d'ingénierie, les autres documents y renvoyant | toute contradiction entre documents doit pouvoir être tranchée par une règle écrite | avant la première divergence réelle (autre session possible) |
+| Préséance unique entre documents | une seule table (dans `Planification` §1 ou `Suivi` §3) incluant les documents d'ingénierie, les autres documents y renvoyant ; la ligne « organisation du dépôt `FromTo Github` » figure déjà dans `Planification` §1 depuis la fusion de l'ancien document d'organisation dans le référentiel | toute contradiction entre documents doit pouvoir être tranchée par une règle écrite | avant la première divergence réelle (autre session possible) |
 | Cohérence §1.3 ↔ Annexe A du document d'étape 1 | placer le bloc 13 où le tableau §1.3 le dit (ou corriger le tableau), matérialiser le sous-bloc 12.3, ramener `CAP_LOG_SD_NOM` au bloc annoncé | l'Annexe A, copiée à `M0b`, ne doit diverger d'aucune table du document | `M0b` (copie du squelette) |
 
 ---

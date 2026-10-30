@@ -651,6 +651,12 @@ décalerait les index.
   ajouté dans `include/Capteurs/`.
 
 ### 1.7 Arborescence cible
+
+> L'arborescence **transversale** du dépôt, les rôles des dossiers et les règles de
+> dépendance font foi dans
+> [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md) §10
+> (« Organisation du dépôt `FromTo Github` »). Le détail ci-dessous ne couvre que les
+> emplacements propres à l'étape 1.
 ```
 FromTo Github/
 ├── lib/sensors/

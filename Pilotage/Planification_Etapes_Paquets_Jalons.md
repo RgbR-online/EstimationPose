@@ -29,6 +29,7 @@ Il ne remplace pas les documents techniques détaillés. Il sert de référence 
 |---|---|
 | Identifiants, niveaux, jalons, règles de progression, gabarit de passation | **ce document** |
 | Objectifs, périmètres, livrables et critères d'acceptation de paquet | [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md) |
+| Emplacements, frontières de responsabilité et règles de dépendance dans le dépôt `FromTo Github` | [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md) §10 (« Organisation du dépôt `FromTo Github` ») |
 | Détail d'implémentation d'une étape | `Reference_Technique_Etape_<n>_*.md` |
 | Critères de sortie d'étape (§4) | **synthèse** des critères de paquet ; en cas d'écart, le critère de paquet fait foi |
 

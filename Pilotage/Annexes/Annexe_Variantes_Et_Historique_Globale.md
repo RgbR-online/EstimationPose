@@ -33,6 +33,7 @@ raisonnements et pour éviter qu'un futur agent ne « redécouvre » une piste d
 | **Renvoi direct du référentiel global vers les contrats** (`Contrats_Interfaces_Estimation.md` conservé) | **Rejeté** | Le fichier de contrats ne servait qu'à alléger l'étape 1 ; il créait une troisième source pour les structures d'estimation et un risque de dérive avec l'étape 2 | Contrats réintégrés dans `Reference_Technique_Etape_1_Capteurs.md` §7 et Annexe C |
 | **Diagramme de séquencement dupliqué** dans le référentiel global | **Rejeté** | Copie mot pour mot du diagramme de la planification ; deux sources divergentes possibles pour un même séquencement | Diagramme conservé uniquement dans la planification §3 (copie gelée au §4 ci-dessous) |
 | **Table des jalons dupliquée** dans le référentiel global | **Rejeté** | Même contenu reformulé ; risque d'incohérence sur les positions `C2.1`/`C2.2` | Table conservée uniquement dans la planification §5 (copie gelée au §4 ci-dessous) |
+| **Document séparé pour l'organisation du dépôt** (`Organisation_FromTo_Github.md`) | **Abandonné** (fusionné) | Second document normatif structuré par paquet : double maintenance et risque de divergence avec les paquets du référentiel, préséance autodéclarée contraire à la règle de préséance unique. Cela ne contredit pas le rejet de la « fusion en un seul document » : l'organisation du dépôt suit le même rythme technique que les paquets du référentiel, contrairement à la planification qui en a un distinct | Contenu intégré au référentiel §10 (organisation transversale) et aux blocs « Organisation du dépôt » des paquets (§3 à §8) ; préséance sur les emplacements ajoutée à la planification §1 ; fichier supprimé (l'original reste dans l'historique Git du dépôt de documentation) |
 | **Renommage avec préfixes numériques** (`00_`, `10_`, `20_`, `90_`) pour imposer l'ordre de lecture | **Différé** | Renommage plus lourd, liens à maintenir à chaque nouvelle étape ; l'ordre de lecture est déjà imposé par `Suivi_Avancement.md` §2 | Réévaluable si le nombre de fichiers augmente |
 | **Suppression pure et simple** de l'ancien fichier de contrats, sans archive | **Rejeté** | Perte de la trace des décisions ; une copie gelée ne coûte rien | `Annexe_Archive_Contrats_Interfaces.md` — copie gelée d'abord conservée, puis **allégée le 2026-10-30** (bandeau + table de correspondance) ; le contenu intégral reste dans l'historique Git du dépôt de documentation (`Programmation/`, commit initial du 2026-10-30) |
 
@@ -51,6 +52,8 @@ raisonnements et pour éviter qu'un futur agent ne « redécouvre » une piste d
 | 2026-10-30 | `Suivi_Avancement.md` créé comme point d'entrée unique des sessions | `Suivi_Avancement.md` |
 | 2026-10-30 | Convention de nommage : `Planification_*` (normatif), `Reference_Technique_*` (technique), `Annexe_*` (non normatif) | tous les documents du dossier |
 | 2026-10-30 | Dossier renommé `Pilotage/` ; annexes regroupées dans `Annexes/` ; annexe archive allégée, sa copie intégrale conservée dans l'historique Git du dépôt de documentation | `Annexe_Archive_Contrats_Interfaces.md` |
+| 2026-10-30 | Fusion de `Organisation_FromTo_Github.md` dans le référentiel : organisation transversale du dépôt en §10, conséquences par paquet en blocs « Organisation du dépôt » (§3 à §8) ; préséance sur les emplacements ajoutée à la planification §1 ; la dette de révision du document (vocabulaire « feuille de route », préséance propre) est soldée par la fusion ; fichier supprimé | `Reference_Technique_Globale.md` §3 à §10 ; `Planification_Etapes_Paquets_Jalons.md` §1 |
+| 2026-10-30 | Checklist de création d'un document d'étape étendue : les blocs « Organisation du dépôt » migrent vers le document d'étape à sa création (§2.2, règle 7) | `Reference_Technique_Globale.md` §2.1.1, §2.2 |
 
 ---
 
@@ -109,6 +112,21 @@ flowchart TD
    l'étape 1 (§7 et Annexe C), le fichier de contrats est supprimé et archivé
    (`Annexe_Archive_Contrats_Interfaces.md`). Motif : une seule source par type de contenu,
    et un document d'étape qui reste autosuffisant pour la programmation.
+
+### 4.4 Critères globaux de l'ancien `Organisation_FromTo_Github.md` (non repris à la fusion)
+
+> À la fusion de l'ancien document d'organisation dans le référentiel (§10), ses critères
+> globaux de réussite ont été **dédupliqués** plutôt que repris : ils répétaient les
+> règles permanentes de la planification (§7, règles 5 à 7) et les critères de paquet du
+> référentiel. Conservés ici à titre historique uniquement.
+
+- il n'existe qu'un seul dépôt Git pour le firmware, les capteurs et le filtre ;
+- `lib/sensors/` et `lib/kalman/` sont les sources uniques de vérité ;
+- chaque bench est un projet PlatformIO autonome, constructible et exécutable ;
+- `test/` contient des assertions, pas des programmes interactifs ;
+- le firmware consomme les bibliothèques sans en copier le code ;
+- les données volumineuses et les documents confidentiels restent hors du dépôt ;
+- les étapes de la feuille de route sont traçables dans l'historique Git et dans les revues, sans duplication d'arborescence.
 
 ---
 
