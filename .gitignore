@@ -1,0 +1,5 @@
+# Dépôt de traçabilité documentaire : Pilotage/ (documents du projet) et
+# Passations/ (notes de passation). Le reste de Programmation/ possède son
+# propre historique Git ou n'est pas de la documentation :
+FromTo Github/
+NvCapteurs/
