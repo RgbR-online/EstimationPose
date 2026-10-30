@@ -329,6 +329,9 @@ cible après flash.
 | 2026-10-30 | `cap_predicats.h` hébergé dans `lib/sensors/include/` — le sous-module `commun/` reste inchangé | Référence étape 1 §1.7, Annexe A |
 | 2026-10-30 | Tests natifs des fonctions pures hébergés dans `lib/sensors/test/` (`env:native` de la bibliothèque) ; les `bench/` restent des programmes de banc, sans assertions | Référence étape 1 §1.7 ; `Organisation` §4 à §6 |
 | 2026-10-30 | Références corrigées dans la référence étape 1 §8 (changelog déplacé ici) : « Implementation §2.6 » → **§2.5.1** (fil volant `H_INTN`) ; « Formulations_Kalman §2 » → **§2.2.1** et **§2.2.4** ; « §1.3.5 de Formulations_Kalman » confirmé valide (tableau de synthèse métrologique, cible du report des σ) | Référence étape 1 §8 |
+| 2026-10-30 | Cohérence §1.3 ↔ Annexe A tranchée **avant `M0b`** (option « corriger le tableau ») : le bloc 13 sort du tableau « Sous-config DÉVELOPPEMENT » — il est socle pour ses phases et déclencheurs, son tampon d'émission et sa clôture étant sous `#if VALIDATION` ou `DEV` (le référentiel global exige ce contrat à `C1.1`) ; sous-bloc 12.3 matérialisé dans le squelette ; `CAP_LOG_SD_NOM` déplacé du bloc 11 au bloc 13, où le tableau §1.3 l'annonce | Référence étape 1 §1.3, Annexe A |
+| 2026-10-30 | Définition de « fini » par paquet : chaque critère de la §6 est marqué de son paquet et la correspondance `M0a`–`M4` est ajoutée — tous les repères internes relèvent du paquet `1.1` (`C1.1`, jalon `J1`) ; aucun critère `C1.2`/`C1.3` n'est exigé à `C1.1` (les entrées du paquet `1.2` stipulent que trame canonique, tampon et machine de phases sont démontrés en `1.1`) | Référence étape 1 §6 ; Référentiel global §3 |
+| 2026-10-30 | Renvoi corrigé en §2.7 : les commandes clavier `CAP_DEV_CMD_*` sont définies au **bloc 12** (et non au bloc 13), conformément au tableau §1.3 et à l'Annexe A | Référence étape 1 §1.3, §2.7, Annexe A |
 
 ---
 

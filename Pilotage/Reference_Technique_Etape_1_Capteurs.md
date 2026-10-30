@@ -329,11 +329,20 @@ format et le puits SD sont hérités ; la série est rendue au diagnostic, cf. �
 | Bloc | Contenu |
 | :--- | :--- |
 | 12. Diagnostic | série **libre** (`CAP_DEV_SERIAL_LIBRE`) : scan I2C au démarrage, traces de lecture/écriture de registres et de trames SHTP, détermination de la fréquence d'échantillonnage réelle, statistiques détaillées, journal étendu ; commandes clavier de session (`CAP_DEV_CMD_*`, bloc 12) |
-| 12.3 Simulation | `CAP_SIM_ACTIF` (rejeu de jeux de données, paquet 1.2) : **capability DEV uniquement** ; `CapSimule<T>` et sa branche de fabrique ne sont compilés que sous ce sous-bloc. Hors DEV, `CAP_SIM_ACTIF` n'existe pas et une ligne `SOURCE_SIMULE` active est refusée à la compilation (§1.2.1) |
+| 12.3 Simulation (sous-bloc du bloc 12) | `CAP_SIM_ACTIF` (rejeu de jeux de données, paquet 1.2) : **capability DEV uniquement** ; `CapSimule<T>` et sa branche de fabrique ne sont compilés que sous ce sous-bloc. Hors DEV, `CAP_SIM_ACTIF` n'existe pas et une ligne `SOURCE_SIMULE` active est refusée à la compilation (§1.2.1) |
+
+**Bloc 13 — Session** (socle pour les phases et déclencheurs ; tampon d'émission et
+clôture sous `#if CAP_MODE_RUNTIME == VALIDATION` ou `DEV`, §1.3.2) :
+
+| Bloc | Contenu |
+| :--- | :--- |
 | 13. Session | machine de phases `INIT` … `HALTED` (§5.2) ; bouton `CAP_SESSION_BOUTON_PIN` (**`À définir`**, matériel non figé) et son **équivalent DEV** (`CAP_DEV_CMD_PORT`, table des touches) ; lancement automatique de banc (`CAP_SESSION_AUTO_START_MS`, DEV) ; tampon d'émission et clôture (§1.3.2) ; motif de nom de fichier SD (`CAP_LOG_SD_NOM`) |
 
 **Numérotation.** Le bloc 10 est placé **en fin de fichier** dans l'Annexe A, car il teste
-les blocs 11 à 13 ; « 12.3 » est un **sous-bloc** du bloc 12, comme dans le squelette.
+les blocs 11 à 13 ; « 12.3 » est un **sous-bloc** du bloc 12, comme dans le squelette ; le
+bloc 13 suit le bloc 12 sans être enfermé dans le `#if` DEV : ses phases et déclencheurs
+sont socle, son tampon d'émission et sa clôture sont sous `#if VALIDATION` ou `DEV`
+(§1.3.2).
 
 Le mode **USAGE** n'ajoute aucun bloc : seules les LED de défaut (bloc 9) restent
 actives, elles relèvent de la sûreté de fonctionnement. Le squelette complet figure en
@@ -860,7 +869,7 @@ et chacun est logué individuellement (§1.3). Squelette en **Annexe B**.
    (bloc 5 de la config) ; échec signalé par LED et métadonnée `#`, **jamais par du texte
    libre sur le puits canonique** (§1.3.1). L'initialisation ne lance pas la calibration :
    la phase `ATTENTE_CALIB` attend un appui (bouton **`À définir`**, ou équivalent DEV
-   `CAP_DEV_CMD_*`, bloc 13) ; la mesure ne démarre qu'en `RUNNING`. Cette phase n'a pas de
+   `CAP_DEV_CMD_*`, bloc 12) ; la mesure ne démarre qu'en `RUNNING`. Cette phase n'a pas de
    motif LED propre (§1.3.3) : elle est annoncée par la métadonnée `#` et, en DEV, à la
    console ; c'est le passage à « prêt à démarrer » qui est visible.
 2. `loop()` : `while (getSensorEvent(&v))` — dispatch par `sensorId`, détection de
@@ -1211,6 +1220,8 @@ complète prend forme dans le paquet 1.2, quand plusieurs capteurs coexistent.
 
 Les repères `M0a` à `M4` sont des points de contrôle internes au détail technique. Ils ne
 remplacent ni les points de reprise `C1.1`, `C1.2`, `C1.3`, ni les jalons `J1` et `J2`.
+Tous relèvent du paquet `1.1` ; la correspondance aux points de reprise figure au §6
+« Définition de « fini » (Étape 1) ».
 
 | Point | Contenu | Sortie |
 | :--- | :--- | :--- |
@@ -1267,19 +1278,31 @@ remplacent ni les points de reprise `C1.1`, `C1.2`, `C1.3`, ni les jalons `J1` e
 | Structures divergentes selon le mode, le filtre ou les grandeurs | Disposition fixe ; `valid` + `FilterConfig` + `#if` sur les fonctions uniquement (`Contrats` §4) |
 
 ### Définition de « fini » (Étape 1)
-Tous les critères §2.8/§3.8 sont satisfaits sur Teensy 4.1 réelle ; `CapteursConfig.h` est
-validé **et chaque projet de test compile avec ses macros réellement surchargées par
-`build_flags`** (mode et famille, §1.2) ; les valeurs σ mesurées sont consignées pour
-alimenter $R$/$Q$ à l'étape 2.1 ; les **tests natifs** (`env:native`) des fonctions pures et
-des prédicats `constexpr` passent, et l'**exemple de trame est produit par
-`formatRecord()`** au lieu d'être recopié (§1.3.1) ; la **parité de trame entre deux puits
-alimentés par le même `formatRecord()`** (série + puits fichier simulé) est vérifiée sur un
-même jeu d'essai (en-tête et lignes identiques, §1.3.1) ; le **contrat du tampon et de la
-clôture** (§1.3.2) est vérifié sur un puits simulé bloquant (alerte, aucune ligne
-tronquée, fichier relu conforme, clôture unique) et le `static_assert` de dimensionnement
-passe au débit pire configuré ; la **machine de phases** est démontrée en DEV
-(`INIT` → … → `HALTED`, §5.2) et la **LED 13** affiche P1/P2/P3 conformément à §1.3.3 ;
-l'arborescence `NvCapteurs` → `Capteurs` (PlatformIO) est migrée.
+Chaque critère porte le paquet qui l'exige : aucun critère relevant de `C1.2` ou `C1.3`
+n'est exigé à `C1.1`. Les repères `M0a` à `M4` relèvent tous du paquet `1.1` ; les paquets
+`1.2` (acquisition multi-capteurs) et `1.3` (caractérisation et jeux de données) n'ont
+aucun repère interne dans ce document — leurs critères d'acceptation sont ceux du
+référentiel global (§3).
+
+| Critère | Paquet | Repères |
+| :--- | :--- | :--- |
+| Tous les critères §2.8/§3.8 sont satisfaits sur Teensy 4.1 réelle | `1.1` | `M1`, `M2` |
+| `CapteursConfig.h` est validé **et chaque projet de test compile avec ses macros réellement surchargées par `build_flags`** (mode et famille, §1.2) | `1.1` | `M0b` |
+| Les valeurs σ mesurées sont consignées pour alimenter $R$/$Q$ à l'étape 2.1 | `1.1` | `M1`, `M2` |
+| Les **tests natifs** (`env:native`) des fonctions pures et des prédicats `constexpr` passent | `1.1` | `M0b`, `M3` |
+| L'**exemple de trame est produit par `formatRecord()`** au lieu d'être recopié (§1.3.1) | `1.1` | `M4` |
+| La **parité de trame entre deux puits alimentés par le même `formatRecord()`** (série + puits fichier simulé) est vérifiée sur un même jeu d'essai (en-tête et lignes identiques, §1.3.1) | `1.1` | `M4` |
+| Le **contrat du tampon et de la clôture** (§1.3.2) est vérifié sur un puits simulé bloquant (alerte, aucune ligne tronquée, fichier relu conforme, clôture unique) et le `static_assert` de dimensionnement passe au débit pire configuré | `1.1` | `M4` |
+| La **machine de phases** est démontrée en DEV (`INIT` → … → `HALTED`, §5.2) et la **LED 13** affiche P1/P2/P3 conformément à §1.3.3 | `1.1` | `M4` |
+| L'arborescence `NvCapteurs` → `Capteurs` (PlatformIO) est migrée | `1.1` | `M0b` |
+
+**Correspondance repères internes ↔ points de reprise.** `M0a` et `M0b` (audit,
+arborescence, configuration), `M1`/`M2` (validation par capteur, σ consignés), `M3`
+(consolidation des classes) et `M4` (journalisation, session, LED, clôture ; son bilan
+donne la feuille verte pour le paquet `1.2`) appartiennent tous au paquet `1.1` — point de
+reprise `C1.1`, jalon `J1`. Les paquets `1.2` et `1.3` — points de reprise `C1.2` et
+`C1.3` — s'appuient sur ces contrats démontrés (entrées du paquet `1.2`, référentiel §3)
+sans repère interne propre.
 
 ---
 
@@ -1745,12 +1768,9 @@ constexpr uint32_t capTimeoutUs(uint32_t periode_us) {
 #ifndef CAP_LOG_LIGNES_PAR_FLUSH
 #define CAP_LOG_LIGNES_PAR_FLUSH 100 // SD : flush tous les N enregistrements
 #endif
-#ifndef CAP_LOG_SD_NOM
-#define CAP_LOG_SD_NOM "<session>_<boot>.csv"  // motif ; label de session en métadonnée
-#endif
 #endif
 
-// ---------- 12. Diagnostic et simulation (DEV) ----------
+// ---------- 12. Diagnostic (DEV) ----------
 #if CAP_MODE_RUNTIME == CAP_MODE_DEV
 #ifndef CAP_DEV_SERIAL_LIBRE
 #define CAP_DEV_SERIAL_LIBRE   1  // série = journal humain (scan I2C, registres, debug)
@@ -1762,6 +1782,8 @@ constexpr uint32_t capTimeoutUs(uint32_t periode_us) {
 #define CAP_DEV_FREQ_REELLE    1  // détermination de la fréquence d'échantillonnage
 #define CAP_DEV_STATS          1  // statistiques détaillées (diagnostic embarqué)
 #define CAP_DEV_JOURNAL_ETENDU 1
+
+// ---------- 12.3. Simulation (sous-bloc du bloc 12, DEV) ----------
 // Simulation : capability DEV uniquement (rejeu de jeux de données, paquet 1.2).
 // 1 = CapSimule compilé et utilisable (surchargeable par -D CAP_SIM_ACTIF=0) ;
 // une ligne SOURCE_SIMULE active sans ce drapeau est refusée par le bloc 10.
@@ -1797,6 +1819,9 @@ constexpr uint32_t capTimeoutUs(uint32_t periode_us) {
 #define CAP_LOG_DRAIN_MS_MAX        2        // ou 2 ms max par passage de boucle
 #define CAP_LOG_SERIAL_PORT         Serial8  // valeur provisoire ; BROCHES À DÉFINIR (§1.7.1)
                                              // jamais le port de débogage en DEV
+#ifndef CAP_LOG_SD_NOM
+#define CAP_LOG_SD_NOM "<session>_<boot>.csv"  // motif du fichier SD (bloc 13, §1.3.2) ;
+#endif                                         // label de session en métadonnée
 
 // Longueurs maximales de ligne par type (octets, format §1.3.1) : bornent le débit pire.
 // Elles sont VÉRIFIÉES par le test natif qui formate une trame au pire cas pour chaque

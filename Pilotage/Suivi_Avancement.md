@@ -162,10 +162,8 @@ n'existent pas encore : ils sont créés au démarrage du premier paquet de leur
 | Point | Options | Critère de décision | À trancher avant |
 |---|---|---|---|
 | Destination des contrats d'interface (`Reference_Technique_Etape_1_Capteurs.md` §7 et Annexe C) | transfert de la spécification des types au document de l'étape 2 (l'étape 1 ne conservant que §7.1 et les renvois), ou conservation pérenne dans l'étape 1 | l'étape 2 doit pouvoir spécifier ses types sans dépendre du document d'une autre étape, et le paquet `1.2` doit figer ses logs sans attendre | `C1.3` (décision consignée dans la note de passation) |
-| Définition de « fini » de l'étape 1 par paquet (`Reference_Technique_Etape_1_Capteurs.md` §6) | marquer chaque critère de son paquet (`1.1`/`1.2`/`1.3`) et ajouter la correspondance `M0a–M4 ↔ C1.1/C1.2/C1.3`, ou laisser l'agrégat tel quel | aucun critère relevant de `C1.2` ne doit être exigé à `C1.1` | note de passation `C1.1` |
 | Destination des livrables du paquet `1.3` | jeux de données hors dépôt + catalogue versionné (p. ex. `test/fixtures/` et répertoire externe documenté) ; chemin du parseur unique ; emplacement du rapport de caractérisation ; support de consignation des σ (document du dépôt, pas `Formulations_Kalman.pdf`) | le paquet `2.1` doit pouvoir référencer ses entrées par un chemin unique (référentiel §2.2, règle 4) | `C1.3` |
 | Préséance unique entre documents | une seule table (dans `Planification` §1 ou `Suivi` §3) incluant les documents d'ingénierie, les autres documents y renvoyant ; la ligne « organisation du dépôt `FromTo Github` » figure déjà dans `Planification` §1 depuis la fusion de l'ancien document d'organisation dans le référentiel | toute contradiction entre documents doit pouvoir être tranchée par une règle écrite | avant la première divergence réelle (autre session possible) |
-| Cohérence §1.3 ↔ Annexe A du document d'étape 1 | placer le bloc 13 où le tableau §1.3 le dit (ou corriger le tableau), matérialiser le sous-bloc 12.3, ramener `CAP_LOG_SD_NOM` au bloc annoncé | l'Annexe A, copiée à `M0b`, ne doit diverger d'aucune table du document | `M0b` (copie du squelette) |
 
 ---
 
