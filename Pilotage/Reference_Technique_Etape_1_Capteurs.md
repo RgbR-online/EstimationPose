@@ -235,7 +235,7 @@ Correspondance, à reporter dans l'en-tête du fichier :
 **compilation de fonctions** (journalisation, diagnostic, simulation) ; la topologie
 capteurs est décrite par les tables d'instances. Une instance physique conserve la même
 `id`, la même adresse et le même bus dans tous les modes : c'est ce qui permet de
-rapprocher un log `VALIDATION`, une session `DEV` et un rejeu de l'étape 2.1, et de
+rapprocher un log `VALIDATION`, une session `DEV` et un rejeu des étapes 2.1 et 2.2, et de
 réutiliser `CapteursState` sans remappage.
 
 La seule propriété d'instance dont l'admissibilité dépend du mode est la **source** :
@@ -282,7 +282,7 @@ ligne** (utilisé par `CapteursState`) ; un `static_assert` garantit que
 `CFG_*[i].id == i + 1`, de sorte que `id` et `i` ne peuvent pas diverger. Le sélecteur
 `CAP_TEST_CIBLE` ne renumérote ni l'un ni l'autre. Une instance conserve son `id` dans
 tous les modes et toutes les sessions : c'est la clé de rapprochement entre un log
-`VALIDATION`, une session `DEV` et un rejeu de l'étape 2.1.
+`VALIDATION`, une session `DEV` et un rejeu des étapes 2.1 et 2.2.
 
 **Valeur par défaut de `CAP_REQUIRE_SINGLE_SENSOR`.** Le drapeau vaut `1` dès qu'un
 `CAP_TEST_CIBLE` autre que `TEST_TOUS` est posé, et `0` sinon (`#ifndef`, Annexe A) :
@@ -346,7 +346,7 @@ actives, elles relèvent de la sûreté de fonctionnement. Le squelette complet 
 (`log_capteurs.h::formatRecord()`), puis écrite telle quelle par le ou les puits actifs.
 Seule exception : le débordement d'un puits rejette des **lignes entières**, jamais des
 octets (§1.3.2).
-Le script Python de l'étape 2.1 n'a donc qu'un seul analyseur, et un jeu de données capturé
+Le script Python des étapes 2.1 et 2.2 n'a donc qu'un seul analyseur, et un jeu de données capturé
 par la série est interchangeable avec le même jeu capturé sur SD. Règles opposables :
 
 | Règle | Motif |
@@ -1087,7 +1087,7 @@ horodatage, son drapeau de fraîcheur et son compteur de séquence (squelette en
   `valid` changent (§7.2, §7.4).
 * **Historique** : écrasement simple à chaque nouvelle mesure — **aucun historique de
   mesures en RAM**, l'historique vit dans les logs (SD ou série, trame canonique
-  identique — §1.3.1) exploités aux étapes 1.3 et 2.1. Le **tampon d'émission** (§1.3.2) n'est pas
+  identique — §1.3.1) exploités aux étapes 1.3, 2.1 et 2.2. Le **tampon d'émission** (§1.3.2) n'est pas
   un historique : borné, vidé en continu, il absorbe seulement la latence du puits.
 * **Radio** : les structs de paquets ne sont remplis qu'au moment de l'envoi, par les
   fonctions de packing existantes (`toPacket`/`fromPacket`).
@@ -1306,10 +1306,10 @@ l'arborescence `NvCapteurs` → `Capteurs` (PlatformIO) est migrée.
    d'un capteur ; la variabilité passe par des capacités (`MAX_*`), des masques et des
    `#if` sur les **fonctions**.
 4. `id` et index de ligne sont **stables** (§1.2.1) : un log d'Étape 1 reste
-   rapprochable d'un rejeu de validation de l'étape 2.1.
+   rapprochable d'un rejeu de validation des étapes 2.1 et 2.2.
 5. Les types d'estimation (`FilterState`, `ControlState`, `FilterDiagnostics`) ne sont
    **pas** compilés dans les projets de test d'Étape 1 ; ils sont figés ici pour que le
-   paquet 1.2 et l'étape 2.1 ne les remettent pas en cause.
+   paquet 1.2 et les étapes 2.1 et 2.2 ne les remettent pas en cause.
 
 ### 7.2 État du filtre : `FilterState` dédié
 
@@ -1411,7 +1411,7 @@ et la compilation des **fonctions**.
 | Type de filtre (`6`/`15`/`16`) | non pour `FilterState` ; oui pour `dx`/`P` | `FilterConfig.h` + `if constexpr` ; `valid` marque les champs estimés | La dimension d'erreur est intrinsèque au modèle ; l'interface du contrôle et du log reste stable |
 | Mode d'exécution | non | `#if` sur les **fonctions** de journalisation, diagnostic, simulation ; jamais sur les champs | `VALIDATION` doit rester représentatif de `USAGE` ; `id`, offsets de log et rejeu identiques |
 | Grandeurs mesurées | non | `Vals*` = sur-ensembles + `valid`/`havePosition` | Évite le *slicing* et les variantes par famille |
-| Journalisation | non | `CAP_LOG_*` décide de l'**émission** d'une ligne ; `formatRecord()` reste l'unique producteur | Parité des puits et parseur unique des paquets 1.3 et 2.1 |
+| Journalisation | non | `CAP_LOG_*` décide de l'**émission** d'une ligne ; `formatRecord()` reste l'unique producteur | Parité des puits et parseur unique des paquets 1.3, 2.1 et 2.2 |
 | Capteur absent ou perdu | non | cellule conservée avec `isFresh = false` (et `valid = 0`) ; `CAP_*_ACTIF` compile ou non le pilote | `MAX_*` = capacité matérielle, pas topologie installée |
 | Simulation | non | `SOURCE_SIMULE` + `CapSimule<T>`, en DEV uniquement | Le rejeu produit les mêmes octets et le même état |
 
@@ -1741,7 +1741,7 @@ constexpr uint32_t capTimeoutUs(uint32_t periode_us) {
 #define CAP_LOG_KALMAN        0  // sortie du Kalman : état, covariance → KAL (étape 2.1)
 #endif
 #define CAP_LOG_CONFIG_HASH_PISTE 0  // hash de configuration : PISTE, non requis (§1.3.1)
-#define CAP_LOG_FORMAT_VER 1         // en-tête CSV versionné (contrat des paquets 1.3 et 2.1)
+#define CAP_LOG_FORMAT_VER 1         // en-tête CSV versionné (contrat des paquets 1.3, 2.1 et 2.2)
 #ifndef CAP_LOG_LIGNES_PAR_FLUSH
 #define CAP_LOG_LIGNES_PAR_FLUSH 100 // SD : flush tous les N enregistrements
 #endif

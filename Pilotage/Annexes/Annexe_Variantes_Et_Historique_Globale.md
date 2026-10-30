@@ -54,6 +54,7 @@ raisonnements et pour éviter qu'un futur agent ne « redécouvre » une piste d
 | 2026-10-30 | Dossier renommé `Pilotage/` ; annexes regroupées dans `Annexes/` ; annexe archive allégée, sa copie intégrale conservée dans l'historique Git du dépôt de documentation | `Annexe_Archive_Contrats_Interfaces.md` |
 | 2026-10-30 | Fusion de `Organisation_FromTo_Github.md` dans le référentiel : organisation transversale du dépôt en §10, conséquences par paquet en blocs « Organisation du dépôt » (§3 à §8) ; préséance sur les emplacements ajoutée à la planification §1 ; la dette de révision du document (vocabulaire « feuille de route », préséance propre) est soldée par la fusion ; fichier supprimé | `Reference_Technique_Globale.md` §3 à §10 ; `Planification_Etapes_Paquets_Jalons.md` §1 |
 | 2026-10-30 | Checklist de création d'un document d'étape étendue : les blocs « Organisation du dépôt » migrent vers le document d'étape à sa création (§2.2, règle 7) | `Reference_Technique_Globale.md` §2.1.1, §2.2 |
+| 2026-10-30 | `bench/kalman_replay/` renommé `bench/test_kalman/` (alignement sur la règle `bench/test_*` de §10.1 et sur les environnements `[env:test_*]` du dépôt) ; contenu réparti entre `2.1` (environnement natif, environnement cible en compilation seule, `reference/` des références hôte) et `2.2` (environnement cible exécutable, `scripts/` de comparaison hôte/cible) | `Reference_Technique_Globale.md` §4, §10.2, §10.3, §10.5 |
 
 ---
 

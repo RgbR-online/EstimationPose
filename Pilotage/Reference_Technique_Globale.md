@@ -335,6 +335,7 @@ types d'estimation figés.
 - un projet PlatformIO indépendant, principalement natif ;
 - une bibliothèque de filtre sans dépendance Arduino ni firmware ;
 - des tests unitaires et des scénarios de validation ;
+- des références hôte et leurs tolérances, entrée du paquet `2.2` ;
 - un rapport de validation ;
 - une API publique documentée ;
 - le document de référence détaillé de l'étape (`Reference_Technique_Etape_2_Kalman.md`),
@@ -343,6 +344,7 @@ types d'estimation figés.
 **Critères de sortie :**
 
 - le filtre se compile et s'exécute sur hôte ;
+- le filtre se compile pour `teensy41` (portabilité, sans exécution sur cible) ;
 - les tests unitaires et les scénarios de validation passent ;
 - les invariants numériques sont vérifiés ;
 - les jeux de données et les simulations sont rejouables ;
@@ -353,9 +355,11 @@ types d'estimation figés.
 
 | Créé | Modifié | Inchangé |
 |---|---|---|
-| `lib/kalman/` : noyau pur, `FilterConfig`, types d'état, API de prédiction et de correction | `README.md` pour la procédure de rejeu | `src/`, `include/`, `main/` du firmware |
-| `bench/kalman_replay/` avec environnements natif et/ou cible | `.gitignore` pour les jeux volumineux | `platformio.ini` racine |
-| Tests et scénarios de validation dans `lib/kalman/test/` | | `commun/` |
+| `lib/kalman/` : noyau pur, `FilterConfig`, types d'état, API de prédiction et de correction | `README.md` pour la procédure de rejeu hôte | `src/`, `include/`, `main/` du firmware |
+| `bench/test_kalman/` : `platformio.ini` avec environnement natif (hôte) et environnement cible en **compilation seule** (portabilité, sans exécution) ; programme de rejeu piloté par le `tMicros` des jeux de données `1.3` | `.gitignore` pour les jeux volumineux | `platformio.ini` racine |
+| `bench/test_kalman/README.md` : procédure de rejeu hôte | | |
+| `bench/test_kalman/reference/` : références hôte (format et précision figés) et tolérances, entrée du paquet `2.2` | | |
+| Tests unitaires et scénarios de validation dans `lib/kalman/test/` | | `commun/` |
 | Rapport de validation du filtre | | |
 
 **Point de reprise :** `C2.1`
@@ -401,7 +405,8 @@ publique du filtre.
 
 | Créé | Modifié | Inchangé |
 |---|---|---|
-| Environnement cible de `bench/kalman_replay/` et scripts de rejeu sur cible | `README.md` pour la procédure de rejeu sur cible | `lib/kalman/` : source unique, aucune copie |
+| Environnement cible **exécutable** de `bench/test_kalman/` (même source, sélection par macro) | `bench/test_kalman/platformio.ini` : ajout de l'environnement cible exécutable | `lib/kalman/` : source unique, aucune copie |
+| `bench/test_kalman/scripts/` : comparaison hôte/cible aux `bench/test_kalman/reference/` avec les tolérances de `2.1` | `bench/test_kalman/README.md` : section rejeu sur cible et interprétation des écarts | `src/`, `include/`, `main/` du firmware |
 | Rapport de validation matérielle (comparaison hôte/cible) | | `src/`, `include/`, `main/` du firmware |
 | | | `platformio.ini` racine, `commun/` |
 
@@ -806,7 +811,7 @@ FromTo Github/                 <- dépôt Git et projet PlatformIO firmware
 │   ├── test_bno085/           <- projet PlatformIO autonome
 │   ├── test_bmp581/           <- projet PlatformIO autonome
 │   ├── test_all/              <- acquisition multi-capteurs
-│   ├── kalman_replay/         <- rejeu de données, natif et/ou cible
+│   ├── test_kalman/           <- rejeu du filtre : hôte, portabilité, cible
 │   └── banc_cpu/              <- profilage
 ├── test/                      <- tests automatisés uniquement
 ├── commun/                    <- sous-module existant, inchangé
@@ -823,12 +828,16 @@ Le `platformio.ini` racine reste celui du **firmware**. Chaque dossier de `bench
 | `lib/sensors/` | Pilotes capteurs, décodage, conversions, configuration partagée, interfaces. | Du code spécifique au firmware, des globales de `AirshipState`, des boucles `loop()` de banc. |
 | `lib/kalman/` | Filtre pur, types `FilterState` / `ControlState` / `FilterDiagnostics`, configuration du filtre, tests natifs. | `Arduino.h`, `Wire`, accès matériel, dépendance au firmware. |
 | `bench/test_*` | Programmes prêts à exécuter : initialisation, lecture, affichage, diagnostic. | Des assertions de test unitaire à la place d'un programme de banc. |
-| `bench/kalman_replay/` | Rejeu de jeux de données ou données synthétiques à travers le filtre. | Le filtre lui-même : il doit être dans `lib/kalman/`. |
+| `bench/test_kalman/` | Rejeu de jeux de données ou données synthétiques à travers le filtre : banc hôte, portabilité de compilation et comparaison hôte/cible ; programme exécutable, sans assertions unitaires. | Le filtre lui-même : il doit être dans `lib/kalman/` ; des pilotes ou une dépendance `lib/sensors/`. |
 | `test/` | Tests automatisés et assertions. | Des boucles infinies de lecture capteur. |
 | `src/Capteurs/`, `include/Capteurs/` | Adaptateurs firmware et intégration des bibliothèques. | Une seconde copie des pilotes ou du filtre. |
 | `src/Asservissement/`, `include/Asservissement/` | Consommation de `ControlState` par l'asservissement. | La logique de filtrage ou de décodage capteur. |
 | `main/dirigeable/` | Câblage final : acquisition, filtre, asservissement, télémétrie. | Les détails d'implémentation des capteurs ou du filtre. |
 | `commun/` | Sous-module partagé existant. | Une copie locale non déclarée. |
+
+> **Distinction `test` :** `bench/test_kalman/` est un **programme de rejeu exécutable** ; les
+> tests unitaires et les scénarios de validation du filtre vivent dans `lib/kalman/test/`
+> (`pio test -e native`), et le dossier `test/` de la racine ne porte que des assertions.
 
 ### 10.4 Règles de dépendance
 
@@ -867,7 +876,7 @@ Ces règles doivent être respectées par tous les agents.
 
 - `lib/sensors/` : bibliothèque capteurs, configuration partagée, fonctions pures.
 - `lib/kalman/` : filtre pur, types d'état, tests natifs.
-- `bench/test_bno085/`, `bench/test_bmp581/`, `bench/test_all/`, `bench/kalman_replay/`, `bench/banc_cpu/` : projets PlatformIO autonomes.
+- `bench/test_bno085/`, `bench/test_bmp581/`, `bench/test_all/`, `bench/test_kalman/`, `bench/banc_cpu/` : projets PlatformIO autonomes.
 - `test/fixtures/` : petits jeux de données textuels, si nécessaire.
 - Adaptateurs firmware dans `src/Capteurs/` et `include/Capteurs/`, si l'intégration l'exige.
 
