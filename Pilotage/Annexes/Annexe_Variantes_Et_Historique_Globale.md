@@ -50,7 +50,7 @@ raisonnements et pour éviter qu'un futur agent ne « redécouvre » une piste d
 | 2026-10-30 | `Jalon associé : J3` retiré du paquet `2.1` : `J3` est évalué après `C2.2` uniquement | `Reference_Technique_Globale.md` §4 |
 | 2026-10-30 | `Suivi_Avancement.md` créé comme point d'entrée unique des sessions | `Suivi_Avancement.md` |
 | 2026-10-30 | Convention de nommage : `Planification_*` (normatif), `Reference_Technique_*` (technique), `Annexe_*` (non normatif) | tous les documents du dossier |
-| 2026-10-30 | Dossier renommé `Pilotage/` ; annexes regroupées dans `Annexes/` ; annexe archive allégée, sa copie intégrale conservée dans l'historique Git du dépôt de documentation | `Suivi_Avancement.md` §7, §8 ; `Annexe_Archive_Contrats_Interfaces.md` |
+| 2026-10-30 | Dossier renommé `Pilotage/` ; annexes regroupées dans `Annexes/` ; annexe archive allégée, sa copie intégrale conservée dans l'historique Git du dépôt de documentation | `Annexe_Archive_Contrats_Interfaces.md` |
 
 ---
 

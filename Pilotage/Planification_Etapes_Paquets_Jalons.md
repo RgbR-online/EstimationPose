@@ -1,7 +1,5 @@
 # Planification — étapes, paquets de travail et jalons
 
-*Dernière révision : 2026-10-30 10:27*
-
 > **Statut :** normatif de pilotage. Les identifiants, les paquets et les jalons peuvent
 > être précisés sans changer le modèle à trois niveaux.
 

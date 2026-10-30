@@ -1,7 +1,5 @@
 # Organisation des capteurs et du filtre de Kalman dans `FromTo Github`
 
-*Dernière révision : 2026-10-30 10:27*
-
 ## 1. Objet du document
 
 Ce document décrit l'organisation retenue pour développer les capteurs et le filtre de Kalman **dans le dépôt Git existant `FromTo Github`**, puis pour les intégrer progressivement au firmware.

@@ -1,7 +1,5 @@
 # Référentiel technique global — étapes et paquets
 
-*Dernière révision : 2026-10-30 10:27*
-
 > **Rôle du document.** Référentiel technique **unique** du développement des capteurs, du
 > filtre de Kalman et de leur intégration dans le dirigeable autonome. Il décrit le contenu
 > technique de chaque étape et de chaque paquet, et **pointe vers les documents détaillés**

@@ -1,7 +1,5 @@
 # Suivi d'avancement — point d'entrée des sessions de programmation
 
-*Dernière révision : 2026-10-30 10:27*
-
 > **Lire ce fichier en premier, avant tout autre document.**
 > Il indique où en est le projet, quel paquet exécuter ensuite, et où trouver chaque
 > information. Il ne contient **aucune spécification** : les règles sont dans la
@@ -127,11 +125,9 @@ n'existent pas encore : ils sont créés au démarrage du premier paquet de leur
 2. Mettre à jour le §1 de ce fichier : état du paquet, date, lien vers la note, commit.
 3. Si un jalon vient d'être évalué, renseigner son état et la décision au §1.
 4. Mettre à jour la ligne « **Prochain paquet de travail** ».
-5. Si un document normatif a été modifié, mettre à jour sa ligne « Dernière révision »
-   (date et heure).
-6. Si le déclencheur d'un point du §6 a été atteint au cours du paquet, le trancher ou le
+5. Si le déclencheur d'un point du §6 a été atteint au cours du paquet, le trancher ou le
    replanifier explicitement : un point tranché quitte le §6, sa décision rejoint le
-   document qui fait foi et le journal (§8 ou annexe).
+   document qui fait foi et le journal de l'annexe concernée.
 
 ---
 
@@ -140,7 +136,7 @@ n'existent pas encore : ils sont créés au démarrage du premier paquet de leur
 > Le **§6.1** recense les travaux connus à faire (dette) ; le **§6.2** recense les choix
 > en attente d'arbitrage (points non jugés) et est le **seul registre contraignant** :
 > les idées non normatives détaillées vivent dans les annexes. Un point tranché quitte le
-> §6 ; sa décision rejoint le document qui fait foi et le journal (§8 ou annexe).
+> §6 ; sa décision rejoint le document qui fait foi et le journal de l'annexe concernée.
 
 ### 6.1 Dette documentaire
 
@@ -161,56 +157,19 @@ n'existent pas encore : ils sont créés au démarrage du premier paquet de leur
 | Définition de « fini » de l'étape 1 par paquet (`Reference_Technique_Etape_1_Capteurs.md` §6) | marquer chaque critère de son paquet (`1.1`/`1.2`/`1.3`) et ajouter la correspondance `M0a–M4 ↔ C1.1/C1.2/C1.3`, ou laisser l'agrégat tel quel | aucun critère relevant de `C1.2` ne doit être exigé à `C1.1` | note de passation `C1.1` |
 | Destination des livrables du paquet `1.3` | jeux de données hors dépôt + catalogue versionné (p. ex. `test/fixtures/` et répertoire externe documenté) ; chemin du parseur unique ; emplacement du rapport de caractérisation ; support de consignation des σ (document du dépôt, pas `Formulations_Kalman.pdf`) | le paquet `2.1` doit pouvoir référencer ses entrées par un chemin unique (référentiel §2.2, règle 4) | `C1.3` |
 | Préséance unique entre documents | une seule table (dans `Planification` §1 ou `Suivi` §3) incluant `Organisation_FromTo_Github.md` et les documents d'ingénierie, les autres documents y renvoyant | toute contradiction entre documents doit pouvoir être tranchée par une règle écrite | avant la première divergence réelle (autre session possible) |
-| Fusion des journaux de décisions | `Suivi` §8 devient un index renvoyant aux journaux des annexes ; renommages conservés au §7 seul | un fait consigné à un seul endroit | autre session |
 | Cohérence §1.3 ↔ Annexe A du document d'étape 1 | placer le bloc 13 où le tableau §1.3 le dit (ou corriger le tableau), matérialiser le sous-bloc 12.3, ramener `CAP_LOG_SD_NOM` au bloc annoncé | l'Annexe A, copiée à `M0b`, ne doit diverger d'aucune table du document | `M0b` (copie du squelette) |
 
 ---
 
-## 7. Historique des renommages (2026-10-30)
+## 7. Versionnage Git local
 
-| Ancien nom | Nouveau nom | Motif |
-|---|---|---|
-| `Structure_Etapes_Paquets_Jalons.md` | `Planification_Etapes_Paquets_Jalons.md` | Rôle normatif de pilotage explicite |
-| `Feuille_de_Route_Programmation_Kalman.md` | `Reference_Technique_Globale.md` | Référentiel technique global, et non « feuille de route » |
-| `Feuille_de_Route_Etape_1.md` | `Reference_Technique_Etape_1_Capteurs.md` | Convention `Reference_Technique_Etape_<n>_<thème>` |
-| `Feuille_de_Route_Etape_1_Alternatives_et_Ameliorations.md` | `Annexe_Variantes_Et_Historique_Etape_1.md` | Convention `Annexe_*` = non normatif |
-| `Contrats_Interfaces_Estimation.md` | *(supprimé)* — contenu repris dans `Reference_Technique_Etape_1_Capteurs.md` §7 et Annexe C | Fichier devenu redondant ; copie gelée dans `Annexe_Archive_Contrats_Interfaces.md` |
-| `Feuilles_de_Route/` (dossier) | `Pilotage/` | Cohérence avec la convention de nommage (`Planification_*`, `Reference_Technique_*`, `Annexe_*`) ; annexes regroupées dans `Annexes/` |
+> La documentation (`Programmation/` : `Pilotage/` et `Passations/`) et le code
+> (`FromTo Github/`) sont suivis par **Git en local**.
 
-Jusqu'au 2026-10-30, le dossier n'était pas versionné par Git et ces renommages ne
-conservaient pas d'historique automatique : ce tableau est la trace des renommages
-antérieurs. Depuis cette date, la documentation est versionnée (dépôt Git à la racine de
-`Programmation/`, couvrant `Pilotage/` et `Passations/`) ; l'historique complet est dans
-Git.
-
----
-
-## 8. Journal des décisions documentaires
-
-| Date | Décision | Effet |
-|---|---|---|
-| 2026-10-30 | `Suivi_Avancement.md` devient le point d'entrée unique des sessions | Ordre de lecture et carte des documents (§2, §3) |
-| 2026-10-30 | `Reference_Technique_Globale.md` devient le référentiel technique global et pointe vers un document par étape | §2.1 du référentiel |
-| 2026-10-30 | Contrats d'interface réintégrés dans le document de l'étape 1 ; fichier de contrats supprimé | `Reference_Technique_Etape_1_Capteurs.md` §7 et Annexe C |
-| 2026-10-30 | Déduplication : diagramme de séquencement et table des jalons conservés uniquement dans la planification | Planification §3, §5 |
-| 2026-10-30 | Chaque fichier technique dispose d'une annexe variantes/historique explicitement non normative | `Annexe_Variantes_Et_Historique_*` |
-| 2026-10-30 | Table de suivi §1 réduite aux colonnes d'état ; objets, points de reprise et jalons renvoyés à la planification §4 | §1 |
-| 2026-10-30 | Critères de sortie d'étape : agrégat explicite (étapes multi-paquets) ou renvoi au critère de paquet (étape à paquet unique) | Planification §4 |
-| 2026-10-30 | Tables « Documents associés » des documents normatifs remplacées par des renvois à la carte du présent fichier | Planification §8, Référentiel §10 |
-| 2026-10-30 | Notes de passation logées dans `Programmation/Passations/` (`C<identifiant>.md`) | §5, Planification §6 |
-| 2026-10-30 | Checklist de création d'un document d'étape ; le premier paquet de chaque étape porte sa rédaction | Référentiel §2.1.1 |
-| 2026-10-30 | Règle de réduction de la section du référentiel global à la création d'un document d'étape | Référentiel §2.2 |
-| 2026-10-30 | Paquets complétés des rubriques `Entrées` / `Hors périmètre` (`1.1` à `6.1`) | Référentiel §3 à §8 |
-| 2026-10-30 | Destination des contrats d'interface de l'étape 1 consignée comme point ouvert | §6 |
-| 2026-10-30 | Ligne « Dernière révision » (date et heure) ajoutée aux documents normatifs ; mise à jour en fin de session | documents normatifs |
-| 2026-10-30 | Références internes du document d'étape 1 corrigées (« feuille de route maître », « document compagnon ») | `Reference_Technique_Etape_1_Capteurs.md` |
-| 2026-10-30 | Dossier vide `Programmation/Capteurs/` supprimé | dépôt |
-| 2026-10-30 | Rubrique « Écarts et contradictions détectés » ajoutée au gabarit de passation ; règle 4 du §7 complétée : « terminé » = critères vérifiés **et** note de passation rédigée | `Planification` §6, §7 |
-| 2026-10-30 | Rubriques `Entrées` / `Hors périmètre` effectivement ajoutées aux paquets `1.2` et `1.3` (la ligne du 2026-10-30 ci-dessus devient exacte) | Référentiel §3 |
-| 2026-10-30 | En-tête du document d'étape 1 conforme à la règle 5 du référentiel : rappel de l'interdiction de redéfinir un identifiant | `Reference_Technique_Etape_1_Capteurs.md` |
-| 2026-10-30 | `cap_predicats.h` hébergé dans `lib/sensors/include/` ; tests natifs des fonctions pures dans `lib/sensors/test/` ; le sous-module `commun/` reste inchangé | Référence étape 1 §1.7, Annexe A ; `Organisation` §4 à §6 |
-| 2026-10-30 | Noms de bancs tranchés : `bench/test_all/` et `bench/banc_cpu/` (alternatives « ou `acquisition/` », « ou `test/banc_cpu/` » supprimées) | `Organisation` §3, §6, §7 |
-| 2026-10-30 | Arbitrage « destination des contrats d'interface » programmé à `C1.3`, critère de décision écrit au §6.2 | §6.2 |
-| 2026-10-30 | §4 réduit à un rappel renvoyant à la planification §7 ; §6 scindé en dette (§6.1) et points non jugés (§6.2) | §4, §6 |
-| 2026-10-30 | Dossier renommé `Pilotage/` ; annexes regroupées dans `Annexes/` ; archive des contrats allégée (copie intégrale conservée dans l'historique Git) ; documentation versionnée sous Git (dépôt `Programmation/`) | §3, §7 ; `Annexe_Archive_Contrats_Interfaces.md` |
-| 2026-10-30 | Changelog « Références corrigées » du document d'étape 1 déplacé vers son annexe ; ancres `#paquet-<x>-<y>` généralisées dans le référentiel | Référence étape 1 §8 ; Référentiel |
+Git fait foi pour le suivi des modifications et des versions, de la documentation comme du
+code. Toute modification est tracée par un **commit** ; les dates de dernière révision ne
+sont plus écrites dans les fichiers : la dernière modification d'un fichier et son
+historique complet (dates, heures, diffs, messages) s'obtiennent par Git, par exemple
+`git log -1 -- <fichier>` ou `git log <fichier>`. Les hach courts de commit consignés dans
+la table du §1 et dans les notes de passation font la liaison entre paquets de travail et
+versions du code.

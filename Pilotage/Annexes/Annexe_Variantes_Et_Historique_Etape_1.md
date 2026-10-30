@@ -325,7 +325,7 @@ cible après flash.
 | 2026-10-29 | `FilterType` : quatre valeurs alignées sur `Implementation` §1.2.1 (`INERTIEL_EULER` inclus) | Référence étape 1 §7.2.2 |
 | 2026-10-29 | `FilterState`/`ControlState`/`FilterDiagnostics` extraits dans un fichier de contrats dédié (extraction annulée le 2026-10-30) | Référence étape 1 §7 |
 | 2026-10-30 | Contrats d'interface **réintégrés** dans la référence étape 1 ; fichier `Contrats_Interfaces_Estimation.md` supprimé et archivé | Référence étape 1 §7, Annexe C |
-| 2026-10-30 | Renommage des documents du dossier : `Reference_Technique_*` (technique), `Planification_*` (normatif), `Annexe_*` (non normatif) | `Suivi_Avancement.md` §7 |
+| 2026-10-30 | Renommage des documents du dossier : `Reference_Technique_*` (technique), `Planification_*` (normatif), `Annexe_*` (non normatif) | `Pilotage/`, `Annexes/` |
 | 2026-10-30 | `cap_predicats.h` hébergé dans `lib/sensors/include/` — le sous-module `commun/` reste inchangé | Référence étape 1 §1.7, Annexe A |
 | 2026-10-30 | Tests natifs des fonctions pures hébergés dans `lib/sensors/test/` (`env:native` de la bibliothèque) ; les `bench/` restent des programmes de banc, sans assertions | Référence étape 1 §1.7 ; `Organisation` §4 à §6 |
 | 2026-10-30 | Références corrigées dans la référence étape 1 §8 (changelog déplacé ici) : « Implementation §2.6 » → **§2.5.1** (fil volant `H_INTN`) ; « Formulations_Kalman §2 » → **§2.2.1** et **§2.2.4** ; « §1.3.5 de Formulations_Kalman » confirmé valide (tableau de synthèse métrologique, cible du report des σ) | Référence étape 1 §8 |

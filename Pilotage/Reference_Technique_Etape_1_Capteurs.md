@@ -1,7 +1,5 @@
 # Référence technique — Étape 1 : capteurs en isolation
 
-*Dernière révision : 2026-10-30 10:27*
-
 > **Rôle du document.** Spécification d'implémentation de l'**Étape 1**, détaillée depuis le
 > référentiel technique global [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md).
 > Elle couvre principalement les paquets `1.1` (validation indépendante par capteur) et `1.2`
