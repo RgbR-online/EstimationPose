@@ -109,20 +109,35 @@ de M1/M2 : ils sont lus au point de contrôle M4 (livrable 7).
 <a id="sec-0"></a>
 ## 0. Constat préalable sur l'existant
 
-**Hiérarchie des sources.** Font autorité, dans cet ordre : (1) `Materiel.pdf`,
-`Implementation.pdf`, `Formulations_Kalman.pdf`, les fiches de `Materiel/Datasheets/` et
-le schéma `Elec/Schéma électrique capteurs.pdf` ; (2) la présente feuille, qui doit être
-cohérente avec (1) ou signaler explicitement l'écart ; (3) les sketches de `NvCapteurs/`
-et le dépôt `FromTo Github`, qui ne sont que des **précédents non normatifs** : ils
-servent à repérer des idées, jamais à établir une exigence. Une idée issue du code n'est
-retenue qu'après évaluation de sa pertinence au regard de (1) et (2) (les idées écartées
-sont consignées dans l'annexe
+**Hiérarchie des sources.** Cette hiérarchie **spécialise** la ligne « Sources et valeurs
+techniques » de la table d'autorité de
+[`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md) §1 :
+elle ne vaut que pour les sources et ne reformule pas la table. Font autorité, dans cet
+ordre : (1) `Materiel.pdf`, `Implementation.pdf`, `Formulations_Kalman.pdf`, les fiches de
+`Materiel/Datasheets/` et le schéma `Elec/Schéma électrique capteurs.pdf` ; (2) la présente
+feuille, qui doit être cohérente avec (1) ou signaler explicitement l'écart ; (3) les
+sketches de `NvCapteurs/` et le dépôt `FromTo Github`, qui ne sont que des **précédents non
+normatifs** : ils servent à repérer des idées, jamais à établir une exigence. Une idée issue
+du code n'est retenue qu'après évaluation de sa pertinence au regard de (1) et (2) (les idées
+écartées sont consignées dans l'annexe
 [`Annexe_Variantes_Et_Historique_Etape_1.md`](./Annexes/Annexe_Variantes_Et_Historique_Etape_1.md), §7).
 
 **Broches non encore spécifiées.** Les broches physiques (I2C, UART, LED, interruptions)
-ne sont pas toutes arbitrées. Pour le matériel **existant**, le code fait foi (bus I2C,
-ports série effectivement utilisés) ; pour le matériel **non encore défini**, la mention
-est **`À définir`** — aucune valeur n'est inventée (cf. §1.3 bloc 4 et §8).
+ne sont pas toutes arbitrées. Pour le matériel **existant**, c'est le câblage réel qui
+tranche, sur le schéma `Elec` et au test de continuité
+(`Reference_Technique_Globale.md` §2.3.6) ; le code existant n'en est qu'un **témoin non
+normatif** (bus I2C, ports série effectivement utilisés). Pour le matériel **non encore
+défini**, la mention est **`À définir`** — aucune valeur n'est inventée (cf. §1.3 bloc 4
+et §8).
+
+**Registre des valeurs incertaines.** Les valeurs probables mais non prouvées (adresses I2C,
+broches, registres BMP581, port UWB) sont suivies dans
+[`Suivi_Valeurs_Et_Sources.md`](./Suivi_Valeurs_Et_Sources.md) sous les repères `V-1-01` à
+`V-1-11` et `V-2-01` ; les sections concernées les citent par ce repère. La distinction
+entre **préséance** (quel document fait foi : table d'autorité de
+[`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md) §1) et
+**fiabilité** (à quel point une valeur est sûre), ainsi que les portes de sortie, sont
+fixées au [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md) §2.3.
 
 | Élément | État | Conséquence pour l'Étape 1 |
 | :--- | :--- | :--- |
@@ -733,12 +748,12 @@ n'est inventée.
 | Liaison | Port / broches (code actuel) | `Materiel` §5.4 | Statut |
 | :--- | :--- | :--- | :--- |
 | I2C capteurs | `Wire` 18/19, `Wire1` 16/17, 400 kHz | identique | **établi** (concordant) |
-| UWB DWM1001 | `Serial5` | `Serial1` (0 RX1 / 1 TX1) | **à arbitrer au M0** (code ≠ document) |
-| Trame canonique | `CAP_LOG_SERIAL_PORT` (`Serial8` pressenti) | — | **`À définir`** ; repli admis : USB `Serial` |
+| UWB DWM1001 | `Serial5` | `Serial1` (0 RX1 / 1 TX1) | **à arbitrer au M0** (code ≠ document) — `V-1-06` |
+| Trame canonique | `CAP_LOG_SERIAL_PORT` (`Serial8` pressenti) | — | **`À définir`** — `V-1-07` ; repli admis : USB `Serial` |
 | Télémétrie sol (1.2) | — | `Serial3` (14 TX3 / 15 RX3, 57600 bds) | documenté, **non câblé** à l'Étape 1 |
 | LED de statut | 13 | 13 | **établi** |
-| RGB (réservée) | — | absente | **`À définir`** (schéma `Elec`) |
-| `H_INTN` / `INT` | `-1` (non routé) | broches 2 / 3 (**contredit** §2.4 et §3.4) | **`À définir`** (schéma `Elec`) |
+| RGB (réservée) | — | absente | **`À définir`** — `V-1-08` (schéma `Elec`) |
+| `H_INTN` / `INT` | `-1` (non routé) | broches 2 / 3 (**contredit** §2.4 et §3.4) | **`À définir`** — `V-1-05` (schéma `Elec`) |
 
 **Environnement PlatformIO** — le standard C++17 est **imposé** (`if constexpr`,
 `static_assert` avec message ; `Implementation` §1.2.1 le suppose, il faut l'écrire) :
@@ -771,8 +786,8 @@ conversion invisible sur cible.
 | Élément | Valeur / choix |
 | :--- | :--- |
 | Protocole | **SHTP** par-dessus I2C Fast-Mode 400 kHz (pas de registres classiques) |
-| Adresse | `0x4A` (défaut Adafruit, ADR=0) ou `0x4B` — **figée au M0** (lecture du schéma `Elec` + `scanI2C` capteur seul). Rappel : `0x47` **n'est pas** une adresse SH-2, le `0x47` de `TestAll.ino` ne peut donc pas initialiser un BNO085 et ne doit pas servir de preuve (§0) |
-| Broches | `RST` (reset actif bas, `-1` sur le PCB actuel), `H_INTN` (actif bas, **non routée** → `-1`, règle §0), `BOOT` (haute), sélection de protocole `PS0/PS1` = I2C sur le breakout. `Materiel` §5.4 place pourtant `IMU_INT` sur la broche 2 : divergence **`À définir`** sur le schéma `Elec` |
+| Adresse | `0x4A` (défaut Adafruit, ADR=0) ou `0x4B` — **figée au M0** (lecture du schéma `Elec` + `scanI2C` capteur seul). Rappel : `0x47` **n'est pas** une adresse SH-2, le `0x47` de `TestAll.ino` ne peut donc pas initialiser un BNO085 et ne doit pas servir de preuve (§0) — `V-1-01` |
+| Broches | `RST` (reset actif bas, `-1` sur le PCB actuel), `H_INTN` (actif bas, **non routée** → `-1`, règle §0), `BOOT` (haute), sélection de protocole `PS0/PS1` = I2C sur le breakout. `Materiel` §5.4 place pourtant `IMU_INT` sur la broche 2 : divergence **`À définir`** sur le schéma `Elec` — `V-1-05` |
 | Comportement bus | Quand aucun rapport n'est prêt, le BNO085 **NACK** sans bloquer le bus ; pas de clock-stretching à gérer côté maître |
 | Bibliothèque | `Adafruit_BNO08x` (`begin_I2C(addr)`, `enableReport(id, period_us)`, `getSensorEvent(&v)`, `wasReset()`) |
 
@@ -902,8 +917,8 @@ et chacun est logué individuellement (§1.3). Squelette en **Annexe B**.
 | Élément | Valeur / choix |
 | :--- | :--- |
 | Protocole | I2C classique à registres, Fast-Mode 400 kHz (capable 1 MHz) |
-| Adresse | **Non affirmée ici.** Trois versions coexistent : `Materiel` §3 (`0x47` si SDO=0, `0x46/0x4A` si SDO=1), ce document (§3.1 : Bosch `0x46`/`0x47`, DFRobot `0x47`) et les sketches (`0x47` et `0x4A`). **Figée au M0** : lecture du schéma `Elec`, `scanI2C` du module seul, puis fiche `DFRobot_Fermion_BMP581_SEN0667_Datasheet.pdf` |
-| Broches | `INT` programmable **non routée** sur le PCB (`-1`, règle §0) ; `SDO` définit l'adresse. `Materiel` §5.4 place `BARO_INT` sur la broche 3, en contradiction avec son §3.4 : divergence **`À définir`** sur le schéma `Elec` |
+| Adresse | **Non affirmée ici.** Trois versions coexistent : `Materiel` §3 (`0x47` si SDO=0, `0x46/0x4A` si SDO=1), ce document (§3.1 : Bosch `0x46`/`0x47`, DFRobot `0x47`) et les sketches (`0x47` et `0x4A`). **Figée au M0** : lecture du schéma `Elec`, `scanI2C` du module seul, puis fiche `DFRobot_Fermion_BMP581_SEN0667_Datasheet.pdf` — `V-1-02` |
+| Broches | `INT` programmable **non routée** sur le PCB (`-1`, règle §0) ; `SDO` définit l'adresse. `Materiel` §5.4 place `BARO_INT` sur la broche 3, en contradiction avec son §3.4 : divergence **`À définir`** sur le schéma `Elec` — `V-1-05` |
 | Bibliothèque | `DFRobot_BMP58X` (déjà validée) — l'accès registre brut reste possible pour les algorithmes unitaires |
 
 ### 3.2 Grandeurs mesurables
@@ -952,14 +967,14 @@ dérivent, et le code ne doit contenir aucun numéro de registre en clair.
 
 | Registre | Adresse | Contenu utilisé | Statut |
 | :--- | :--- | :--- | :--- |
-| `CHIP_ID` | 0x01 | valeur attendue 0x50 | à confirmer sur la fiche |
-| `STATUS` | 0x27 | bit `nvm_rdy` | à confirmer |
-| Données | 0x20–0x22 / 0x23–0x25 | P24 / T16, petit-boutiste | à confirmer |
-| `OSR_CONFIG` | **0x38 ?** | OSR_P (bits 2:0), OSR_T (bits 6:4) | **à vérifier** |
-| `ODR_CONFIG` | 0x37 | ODR (5 bits), `pwr_mode`, enables | **à vérifier** (champ « 7:4 » impossible) |
-| `DSP_CONFIG` | 0x30 | shadowing, filtre IIR | **à vérifier** |
-| Registre IIR dédié | ? | coefficient $C$ | **à vérifier** (existence et adresse) |
-| `CMD` | 0x7E | `0x5E` soft reset, `0x72` ODR apply | à confirmer |
+| `CHIP_ID` | 0x01 | valeur attendue 0x50 | `V-1-11` |
+| `STATUS` | 0x27 | bit `nvm_rdy` | `V-1-11` |
+| Données | 0x20–0x22 / 0x23–0x25 | P24 / T16, petit-boutiste | `V-1-11` |
+| `OSR_CONFIG` | **0x38 ?** | OSR_P (bits 2:0), OSR_T (bits 6:4) | `V-1-03` |
+| `ODR_CONFIG` | 0x37 | ODR (5 bits), `pwr_mode`, enables | `V-1-10` (champ « 7:4 » impossible) |
+| `DSP_CONFIG` | 0x30 | shadowing, filtre IIR | `V-1-04` |
+| Registre IIR dédié | ? | coefficient $C$ | `V-1-04` (existence et adresse) |
+| `CMD` | 0x7E | `0x5E` soft reset, `0x72` ODR apply | `V-1-11` |
 
 Séquence d'initialisation, une fois la table validée :
 | # | Transaction I2C | Rôle |
@@ -1486,8 +1501,10 @@ le même en-tête versionné que les autres `type` (§1.3.1).
 <a id="sec-8"></a>
 ## 8. Références
 
-Chemins relatifs à ce fichier. Font autorité, dans cet ordre : les documents
-d'ingénierie, la présente feuille, puis les précédents de code (non normatifs).
+Chemins relatifs à ce fichier. La hiérarchie des sources du §0 s'applique — elle-même
+spécialisation de la table d'autorité de
+[`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md) §1 :
+documents d'ingénierie, présente feuille, puis précédents de code (non normatifs).
 
 | Sujet | Référence | À citer pour |
 | :--- | :--- | :--- |
@@ -1663,8 +1680,8 @@ constexpr bool altiActive(const CfgAlti& c) {
 // l'implémentation (H_INTN, INT) est postérieure à la soutenance, donc hors périmètre.
 // Toutes les broches INT restent à -1 -> polling (§0).
 // Ports série : cf. §1.7.1. UWB = port du code actuel, à arbitrer au M0 ;
-// trame canonique = CAP_LOG_SERIAL_PORT (broches À DÉFINIR) ; télémétrie = Serial3.
-#define CAP_PIN_BNO085_RST -1    // non routé (PCB actuel) — À DÉFINIR sur le schéma Elec
+// trame canonique = CAP_LOG_SERIAL_PORT (broches À DÉFINIR — PROVISOIRE V-1-07) ; télémétrie = Serial3.
+#define CAP_PIN_BNO085_RST -1    // non routé (PCB actuel) — PROVISOIRE V-1-05 (schéma Elec)
 #define CAP_I2C_CLOCK_HZ   400000
 #define CAP_PIN_BNO085_INT -1    // H_INTN non routé -> polling
 #define CAP_PIN_BMP581_INT -1    // INT non routé -> polling
@@ -1686,7 +1703,7 @@ constexpr uint8_t BMP581_ADDR = CFG_ALTI[0].adresse;  // dérivé de la table (M
 // code -> Hz, UNIQUE, à remplir depuis BST-BMP581-DS004.pdf (32 codes, 240 à 0,125 Hz).
 // Aucune valeur de cette table n'est inventée ici : le pilote ne s'écrit qu'après M0a.
 #define BMP581_ODR_HZ_TARGET 50      // valeur de travail, remplacée après la campagne M2
-#define BMP581_ODR_CODE      0xFF    // À DÉFINIR : lookup dans la table vérifiée
+#define BMP581_ODR_CODE      0xFF    // PROVISOIRE V-1-10 : lookup dans la table vérifiée
 #define BMP581_OSR_P_CODE    3       // ×8 (0=×1 … 7=×128)
 #define BMP581_OSR_T_CODE    0       // ×1
 #define BMP581_IIR_C         15      // {1,3,7,15,31,63,127}
@@ -1714,9 +1731,9 @@ constexpr uint8_t BMP581_ADDR = CFG_ALTI[0].adresse;  // dérivé de la table (M
 #define CAP_LED_TEENSY_PIN   13       // Materiel §5.4
 #endif
 #define CAP_LED_RGB_RESERVEE 0        // 1 = activer la RGB (broches À DÉFINIR)
-#define CAP_LED_RGB_R_PIN    -1       // À DÉFINIR
-#define CAP_LED_RGB_G_PIN    -1       // À DÉFINIR
-#define CAP_LED_RGB_B_PIN    -1       // À DÉFINIR
+#define CAP_LED_RGB_R_PIN    -1       // PROVISOIRE V-1-08
+#define CAP_LED_RGB_G_PIN    -1       // PROVISOIRE V-1-08
+#define CAP_LED_RGB_B_PIN    -1       // PROVISOIRE V-1-08
 
 // Seuil de perte DÉRIVÉ de la cadence de l'instance (Implementation §6.2 : 4x période).
 // Aucun CAP_TIMEOUT_*_MS fixe : 4 x periode_us donne 40 ms à 100 Hz, 200 ms à 20 Hz.
@@ -1794,7 +1811,7 @@ constexpr uint32_t capTimeoutUs(uint32_t periode_us) {
 
 // ---------- 13. Session : phases, bouton, tampon d'émission, clôture (§1.3.2, §5.2) ----------
 // Socle : phases et déclencheurs. Le bouton n'est pas défini (matériel non figé).
-#define CAP_SESSION_BOUTON_PIN       -1  // À DÉFINIR (schéma Elec) ; -1 = non câblé
+#define CAP_SESSION_BOUTON_PIN       -1  // PROVISOIRE V-1-09 (schéma Elec) ; -1 = non câblé
 #define CAP_SESSION_BOUTON_ACTIF_BAS  1  // appui = front descendant (poussoir, jamais un bistable)
 #define CAP_SESSION_BOUTON_REBOND_MS 30
 #define CAP_SESSION_CALIB_AUTO_MS     0  // 0 = attendre l'appui pour lancer la calibration
@@ -1817,7 +1834,7 @@ constexpr uint32_t capTimeoutUs(uint32_t periode_us) {
 #define CAP_LOG_BUF_SEUIL_CRIT_PCT  98       // redondance de niveau (clôture auto)
 #define CAP_LOG_DRAIN_LIGNES        64       // drain par lots bornés (gigue maîtrisée)
 #define CAP_LOG_DRAIN_MS_MAX        2        // ou 2 ms max par passage de boucle
-#define CAP_LOG_SERIAL_PORT         Serial8  // valeur provisoire ; BROCHES À DÉFINIR (§1.7.1)
+#define CAP_LOG_SERIAL_PORT         Serial8  // PROVISOIRE V-1-07 ; BROCHES À DÉFINIR (§1.7.1)
                                              // jamais le port de débogage en DEV
 #ifndef CAP_LOG_SD_NOM
 #define CAP_LOG_SD_NOM "<session>_<boot>.csv"  // motif du fichier SD (bloc 13, §1.3.2) ;

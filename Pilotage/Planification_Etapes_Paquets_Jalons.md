@@ -6,8 +6,8 @@
 ## 1. Objet
 
 > **Rôle du document.** Document **normatif de pilotage**. Il définit les niveaux de
-> planification, les identifiants, les jalons et les règles de progression — et **rien
-> d'autre**. Il ne contient aucun contenu technique. Pour savoir où en est le projet et
+> planification, les identifiants, les jalons, les règles de progression et la table
+> d'autorité entre documents — et **rien d'autre**. Il ne contient aucun contenu technique. Pour savoir où en est le projet et
 > dans quel ordre lire les documents, voir
 > [`Suivi_Avancement.md`](./Suivi_Avancement.md).
 
@@ -19,19 +19,49 @@ Il fixe :
 - les identifiants utilisés dans les documents ;
 - les règles de progression et d'arrêt ;
 - les points de reprise et les notes de passation ;
-- les jalons de revue.
+- les jalons de revue ;
+- la table d'autorité entre documents, par type de question.
 
 Il ne remplace pas les documents techniques détaillés. Il sert de référence commune pour savoir **où en est le projet**, **ce qui doit être produit**, **où un agent doit s'arrêter** et **ce qui doit être transmis au suivant**.
 
-**Préséance entre documents de planification et documents techniques.**
+**Table d'autorité entre documents, par type de question.**
 
-| Sujet | Document qui fait foi |
-|---|---|
-| Identifiants, niveaux, jalons, règles de progression, gabarit de passation | **ce document** |
-| Objectifs, périmètres, livrables et critères d'acceptation de paquet | [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md) |
-| Emplacements, frontières de responsabilité et règles de dépendance dans le dépôt `FromTo Github` | [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md) §10 (« Organisation du dépôt `FromTo Github` ») |
-| Détail d'implémentation d'une étape | `Reference_Technique_Etape_<n>_*.md` |
-| Critères de sortie d'étape (§4) | **synthèse** des critères de paquet ; en cas d'écart, le critère de paquet fait foi |
+La préséance documentaire n'est **pas un ordre total** : un même document fait foi sur un
+sujet et reste subordonné sur un autre. Cette table est donc indexée par **type de
+question**, et elle est la **source unique** de la préséance : les autres documents y
+renvoient et ne la reformulent pas — le `Référentiel` §2.2 et le document de l'étape 1 §0
+n'en sont que des spécialisations. La colonne « Qui tranche » sépare l'**autorité** (quel
+texte gagne) de la **gouvernance** (qui peut modifier ou figer). Cette table ne fixe pas
+l'**ordre de lecture**, qui reste celui de `Suivi_Avancement.md` §2.
+
+| Type de question | Fait foi | Détaillent sans contredire | Non normatif — jamais support | Juge de paix (si valeur) | En cas d'écart | Qui tranche |
+|---|---|---|---|---|---|---|
+| Identifiants, niveaux, jalons, règles de progression, gabarit de passation | **ce document** | `Suivi_Avancement.md` §4 (rappel), `Reference_Technique_Globale.md` | — | — | corriger le document de détail, jamais la planification | humain (modèle), agent (application) |
+| Objectifs, périmètres, livrables et critères d'acceptation de paquet | [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md) §3 à §8 | `Reference_Technique_Etape_<n>_*.md` | — | — | corriger le document de détail ; consigner en passation | humain |
+| Détail d'implémentation d'une étape (types, configuration, contrats, squelettes) | `Reference_Technique_Etape_<n>_*.md` | — | sketches `NvCapteurs/`, code existant : **précédents non normatifs** | build et tests | corriger le document d'étape | agent |
+| Emplacements, frontières de responsabilité et règles de dépendance dans le dépôt `FromTo Github` | [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md) §10 (et blocs « Organisation du dépôt » des paquets tant que le document d'étape n'existe pas) | `Reference_Technique_Etape_<n>_*.md` après transfert (`Reference_Technique_Globale.md` §2.2, règle 7) | — | décision documentée (pas de notion de fiabilité) | corriger le document compétent | humain |
+| Sources et valeurs techniques (bus, broches, registres, échelles, constantes) | documents d'ingénierie : `Materiel.pdf`, `Implementation.pdf`, `Formulations_Kalman.pdf`, `Materiel/Datasheets/`, `Elec/Schéma électrique capteurs.pdf` | `Reference_Technique_Etape_<n>_*.md` §0, **s'il est cohérent ou signale l'écart** | `FromTo Github`, sketches : **précédents non normatifs** | `Reference_Technique_Globale.md` §2.3.6 | la mesure bat le document ; valeur provisoire marquée `PROVISOIRE V-nn` | agent (clôt `vérifiée`), humain (`figée`) |
+| Fiabilité d'une valeur (niveau `A` à `D`, impact) | [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md) §2.3.3 à §2.3.5 | — | [`Suivi_Valeurs_Et_Sources.md`](./Suivi_Valeurs_Et_Sources.md) : état, jamais spécification | `Reference_Technique_Globale.md` §2.3.6 | registre corrigé | agent |
+| État d'avancement, prochain paquet, ordre de lecture, carte des documents | [`Suivi_Avancement.md`](./Suivi_Avancement.md) §1 à §3 (état) | §4 de ce document (index de pilotage) | — | — | corriger `Suivi_Avancement.md` | agent |
+| Décision prise en session | **aucun** : elle ne fait foi qu'une fois écrite dans le document désigné par la présente table | note de passation | note de passation : **trace seule** | — | propager au document qui fait foi, puis journaliser | agent (implémentation), humain (doctrine) |
+| Historique, variantes, arbitrages écartés | `Annexe_Variantes_Et_Historique_*.md` | — | `Annexe_*` : **jamais support de programmation** | — | ne peut pas contredire un document normatif | humain |
+| Versions, dates, diffs | Git (dépôt de documentation et dépôt de code) | — | — | — | — | agent |
+
+**Méta-règles pour les cas non listés.** Elles évitent d'allonger la table indéfiniment et
+s'appliquent dans cet ordre :
+
+1. **Normatif > non normatif** : une annexe, un registre d'état, une note de passation ou un
+   précédent de code ne peut jamais contredire un document normatif.
+2. **Spécifique > général** : le critère de paquet prime la synthèse de critères d'étape
+   (§4) ; le document d'étape prime le référentiel pour le détail d'implémentation ; le §10
+   prime pour les emplacements.
+3. **Pour une valeur technique** : la mesure ou l'essai prime le document, et le document
+   normatif prime le registre.
+4. **Une décision n'est normative qu'une fois écrite** dans le document que la table désigne ;
+   une note de passation ne fait que la tracer.
+5. **Écart non couvert** : corriger le document de détail ou le référentiel, jamais la
+   planification, et consigner la correction dans la note de passation
+   (`Reference_Technique_Globale.md` §2.2, dernier alinéa).
 
 ---
 
@@ -286,7 +316,7 @@ La note doit être compréhensible de manière autonome.
 7. Les données volumineuses, les documents confidentiels et les artefacts générés restent hors du dépôt.
 8. Les jalons sont des revues, pas des étapes de code.
 9. Les identifiants de ce document sont les seuls utilisés dans les documents de planification et techniques.
-10. Un document technique **détaille** ; il ne redéfinit ni identifiant, ni jalon, ni critère de sortie d'étape. En cas de divergence, la préséance du §1 s'applique.
+10. Un document technique **détaille** ; il ne redéfinit ni identifiant, ni jalon, ni critère de sortie d'étape. En cas de divergence, la table d'autorité du §1 s'applique.
 
 ---
 

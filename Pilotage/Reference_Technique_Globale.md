@@ -63,10 +63,14 @@ pas reproduite ici : elle figure dans
 
 ### 2.2 Règles de cohérence entre documents
 
-1. **Préséance.** Identifiants, jalons et règles de progression :
-   `Planification_Etapes_Paquets_Jalons.md`. Contenu technique, périmètres, livrables et
-   critères de paquet, organisation du dépôt `FromTo Github` (§10) : le présent
-   référentiel. Détail d'implémentation : le document de référence de l'étape concernée.
+1. **Préséance.** La préséance documentaire est fixée par la table d'autorité **par type de
+   question** de
+   [`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md) §1,
+   source unique ; elle n'est pas reformulée ici. Pour le contenu technique, cette règle n'en
+   rappelle que la portée : périmètres, livrables, critères de paquet et organisation du
+   dépôt `FromTo Github` (§10) relèvent du présent référentiel ; le détail d'implémentation
+   relève du document de l'étape concernée ; les identifiants, jalons et règles de
+   progression relèvent de la planification.
 2. **Identifiants invariants.** Un document d'étape ne crée aucun identifiant nouveau : il
    reprend ceux de la planification (paquets `<étape>.<numéro>`, points de reprise
    `C<étape>.<numéro>`, jalons `J1` à `J6`).
@@ -86,9 +90,106 @@ pas reproduite ici : elle figure dans
    référentiel est réduite à l'objectif et au renvoi vers ce document — y compris les blocs
    « Organisation du dépôt » des paquets concernés, transférés au document d'étape : le
    détail technique d'une étape n'existe qu'à un seul endroit.
+8. **Provenance et doutes.** Toute valeur normative porte sa provenance ; toute valeur dont
+   la fiabilité n'est pas établie porte en outre un repère `V-nn` renvoyant à
+   [`Suivi_Valeurs_Et_Sources.md`](./Suivi_Valeurs_Et_Sources.md). Une valeur ne vit jamais
+   dans le référentiel global : elle appartient au document d'étape et au code.
+9. **Le registre des valeurs ne fait pas autorité.** Il est un état, jamais une
+   spécification : il ne peut pas contredire un document d'étape ni le présent référentiel ;
+   en cas d'écart, le document normatif fait foi et le registre est corrigé.
 
 En cas d'écart détecté entre deux documents : corriger le **document de détail** ou ce
 référentiel, jamais la planification, et consigner la correction dans la note de passation.
+
+### 2.3 Fiabilité des sources, valeurs par défaut et doutes
+
+> **Rôle de la section.** Elle fixe la **méthode** de qualification d'une valeur technique.
+> Elle ne contient aucune valeur et aucun cas concret : les valeurs sont dans les documents
+> d'étape et le code, les doutes dans
+> [`Suivi_Valeurs_Et_Sources.md`](./Suivi_Valeurs_Et_Sources.md).
+
+#### 2.3.1 Préséance et fiabilité sont deux notions distinctes
+
+La table d'autorité de la
+[`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md) §1 —
+spécialisée pour les sources techniques par le §0 de chaque document d'étape — dit **quel
+document fait foi en cas de contradiction**. Elle ne dit **pas** à quel point une valeur est
+sûre. Exemples : un document
+d'ingénierie peut se contredire lui-même (broches `INT` de `Materiel` §5.4 contre ses §2.4
+et §3.4) ; une datasheet peut être mal lue ; une formulation reprise peut être mal
+transcrite. La fiabilité se mesure **par valeur et par passage cité**, pas par document.
+
+#### 2.3.2 Définition
+
+> **Fiabilité** : probabilité que la valeur soit **exacte** *et* **applicable à notre
+> matériel dans notre configuration**, au moment de la rédaction, compte tenu du passage
+> précis consulté.
+
+#### 2.3.3 Échelle à quatre niveaux
+
+Le **niveau** est la variable de décision ; le pourcentage n'est qu'une indication de
+continuité, conservée pour ne pas perdre l'information d'origine.
+
+| Niveau | Nom | Ancrage | Exemples de calibrage |
+|---|---|---|---|
+| `A` | établi | vérifié sur le matériel réel, ou deux sources indépendantes concordantes | mesure de banc, build qui passe |
+| `B` | documenté | datasheet, manuel de référence, schéma, passage identifié | adresse ou trame I2C issue d'une datasheet : **95 %** |
+| `C` | corroboré | source secondaire officielle, formulation reprise, recoupement partiel | site officiel : **80 %** (risque de ne pas trouver la bonne page) ; formulation Kalman reprise : **80 %** (risque de transcription) ; ancien code : **60 %** |
+| `D` | hypothèse | déduction, précédent de code seul, proposition d'agent sans référence | valeur non prouvée, à trancher |
+
+#### 2.3.4 Second axe obligatoire : l'impact
+
+| Impact | Sens |
+|---|---|
+| `bloquant` | une erreur invalide le paquet ou le jalon (adresse, contrat, convention de repère) |
+| `majeur` | une erreur coûte une reprise de code ou de câblage |
+| `mineur` | une erreur se corrige localement, sans propagation |
+
+La priorité de traitement combine les deux axes ; c'est ce couple, et non le pourcentage
+seul, qui décide si un doute interdit de clore un paquet (§2.3.7).
+
+#### 2.3.5 Règles de calcul du niveau
+
+1. **La mesure bat le document.** Un relevé sur le matériel contredit une datasheet : la
+   mesure gagne, et l'écart est consigné.
+2. **Deux sources indépendantes de niveau `C` concordantes → `B`.** Deux sources qui
+   dérivent l'une de l'autre ne comptent que pour une.
+3. **Sans référence, une proposition d'agent est plafonnée à `D`**, quel que soit son
+   aplomb ; si l'agent cite la source, le niveau de la source s'applique.
+4. **Le niveau se périme** : une valeur `B` issue d'une révision de datasheet ou d'une
+   carte qui change doit être réévaluée. D'où la révision et la date dans la provenance.
+5. **Une source ne confirme jamais sa propre valeur** : le juge de paix doit être d'une
+   autre nature que la source (mesure pour un document, test pour une formulation).
+
+#### 2.3.6 Juge de paix par type de tâche
+
+| Type de tâche | Juge de paix | Ne remplace pas le juge de paix |
+|---|---|---|
+| Adresse / bus / trame I2C | `scanI2C` capteur par capteur + schéma `Elec` | un sketch existant, un site |
+| Brochage / port série | schéma `Elec` + test de continuité | `Materiel` §5.4 seul |
+| Constantes de conversion, échelles Q | test unitaire sur valeurs connues | la datasheet seule |
+| Paramètres capteur (ODR, OSR, IIR) | datasheet au passage identifié + mesure de cadence réelle (paquet `1.3`) | la valeur par défaut de la bibliothèque |
+| Formulation / modèle Kalman | test analytique + invariant numérique + référence hôte | une seconde lecture du même PDF |
+| Bruit / covariance | jeu de données du paquet `1.3` | une valeur « raisonnable » |
+| Budget temps / mémoire | mesure sur cible (paquet `5.1`) | l'estimation de datasheet |
+| Organisation du dépôt | décision documentée (§10) | — (pas de notion de fiabilité) |
+
+Le **juge de paix** est la procédure qui clôt le doute ; le **complément d'information**
+(URL, section, banc, personne) est une piste exploratoire et ne clôt rien.
+
+#### 2.3.7 Registre, portes et gouvernance
+
+- **Registre unique.** Les doutes ouverts sont tenus dans
+  [`Suivi_Valeurs_Et_Sources.md`](./Suivi_Valeurs_Et_Sources.md) ; un doute qui traverse
+  plusieurs étapes garde son identifiant et son rattachement courant est mis à jour.
+- **Portes de sortie.** Aucun paquet n'est `terminé` avec un doute `bloquant` ouvert sur son
+  périmètre ; aucun jalon n'est déclaré avec un doute `majeur` ouvert. Un doute dont dépend
+  un paquet suivant est reporté dans les **Entrées** de ce paquet.
+- **Marquage.** Une valeur de niveau `D` codée provisoirement porte `PROVISOIRE V-nn` dans
+  le code ; `À définir` reste réservé à l'absence totale de valeur.
+- **Autorité.** L'agent peut créer, qualifier et clore un doute (`vérifiée`) sur preuve ;
+  le passage à `figée` est **réservé à l'humain** et exige la propagation dans le même
+  commit (document d'étape, code, note de passation).
 
 ---
 
@@ -753,9 +854,11 @@ développement de nouvelles fonctions ; campagnes de données volumineuses dans 
 > vigilance. Elle est normative. Les conséquences de chaque paquet sur cette organisation
 > figurent dans les blocs « Organisation du dépôt » des sections de paquet (§3 à §8) ;
 > elles migrent vers le document de référence détaillé de l'étape à sa création (§2.1.1).
-> En cas de divergence sur les emplacements, cette section fait foi ; l'ordre des étapes
-> relève de la planification (préséance : [`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md)
-> §1). L'historique des choix d'organisation est consigné dans
+> En cas de divergence sur les emplacements, cette section fait foi (table d'autorité,
+> ligne « Emplacements, frontières de responsabilité et règles de dépendance » :
+> [`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md) §1) ;
+> l'ordre des étapes relève de la planification. L'historique des choix d'organisation est
+> consigné dans
 > [`Annexe_Variantes_Et_Historique_Globale.md`](./Annexes/Annexe_Variantes_Et_Historique_Globale.md).
 
 Ne relève pas de cette section : les commandes Git, les procédures d'issue, de branche ou

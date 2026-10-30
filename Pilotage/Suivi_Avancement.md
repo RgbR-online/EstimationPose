@@ -10,7 +10,8 @@
 ## 1. État d'avancement
 
 > Objets, points de reprise et jalons : [`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md) §4,
-> qui fait foi. Ce tableau ne porte que l'état d'avancement.
+> source unique du séquencement et des jalons (le contenu technique des paquets est dans le
+> référentiel). Ce tableau ne porte que l'état d'avancement.
 
 | Paquet | État | Date | Point de reprise | Note de passation | Jalon | Commit |
 |---|---|---|---|---|---|---|
@@ -57,13 +58,17 @@ du commit du dépôt de documentation (`Programmation/`), les hach de code
 
 1. **Ce fichier** (§1 pour l'état, §3 pour la carte des documents).
 2. [`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md) —
-   identifiants, niveaux, jalons, règles de progression, gabarit de note de passation.
+   identifiants, niveaux, jalons, règles de progression, gabarit de note de passation,
+   **table d'autorité entre documents** (§1, à appliquer en cas de contradiction).
 3. [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md) — le paquet à
    exécuter : objectif, périmètre, livrables, critères de sortie ; sa section
    « Organisation du dépôt `FromTo Github` » (§10) si la session crée ou déplace du code.
 4. Le document de référence détaillé de l'étape concernée
    (`Reference_Technique_Etape_<n>_*.md`), s'il existe.
-5. Les documents d'ingénierie cités par ce document d'étape, **uniquement** pour le point
+5. [`Suivi_Valeurs_Et_Sources.md`](./Suivi_Valeurs_Et_Sources.md) — **uniquement** avant de
+   coder ou de modifier une valeur marquée `V-nn`, ou pour vérifier les doutes ouverts du
+   paquet (référentiel §2.3).
+6. Les documents d'ingénierie cités par ce document d'étape, **uniquement** pour le point
    traité.
 
 Les fichiers `Annexe_*` ne sont **jamais** un support de programmation : ils ne se lisent
@@ -76,9 +81,10 @@ que si la session porte explicitement sur une variante ou un historique.
 | Document | Rôle | Normatif ? | Quand le lire |
 |---|---|---|---|
 | [`Suivi_Avancement.md`](./Suivi_Avancement.md) | Point d'entrée : état, ordre de lecture, carte | non (état) | **toujours, en premier** |
-| [`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md) | Niveaux, identifiants, jalons, règles de progression, gabarit de passation | **oui** | début de session |
+| [`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md) | Niveaux, identifiants, jalons, règles de progression, gabarit de passation, table d'autorité entre documents | **oui** | début de session |
 | [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md) | Référentiel technique global : objectifs, paquets, critères, renvois par étape ; organisation du dépôt `FromTo Github` (§10) | **oui** | pour le paquet à exécuter ; §10 avant de créer ou déplacer du code |
 | [`Reference_Technique_Etape_1_Capteurs.md`](./Reference_Technique_Etape_1_Capteurs.md) | Détail de l'étape 1 + contrats d'interface (§7) + squelettes (Annexe C) | **oui** | toute session sur `1.x` |
+| [`Suivi_Valeurs_Et_Sources.md`](./Suivi_Valeurs_Et_Sources.md) | Registre d'état : pont entre valeurs par défaut et valeurs réelles, doutes ouverts et journal des doutes clos | non (état) | avant de coder une valeur `V-nn` ; en fin de paquet pour vérifier les portes de sortie |
 | [`Annexe_Variantes_Et_Historique_Etape_1.md`](./Annexes/Annexe_Variantes_Et_Historique_Etape_1.md) | Variantes écartées et historique des décisions de l'étape 1 | **non — ne pas programmer dessus** | uniquement sur demande explicite |
 | [`Annexe_Variantes_Et_Historique_Globale.md`](./Annexes/Annexe_Variantes_Et_Historique_Globale.md) | Variantes écartées et historique du référentiel global | **non — ne pas programmer dessus** | uniquement sur demande explicite |
 | [`Annexe_Archive_Contrats_Interfaces.md`](./Annexes/Annexe_Archive_Contrats_Interfaces.md) | Archive allégée de l'ancien fichier de contrats (copie intégrale dans l'historique Git) | **non — ne pas programmer dessus** | uniquement pour traçabilité |
@@ -86,11 +92,18 @@ que si la session porte explicitement sur une variante ou un historique.
 Les trois fichiers `Annexe_*` sont regroupés dans le sous-dossier [`Annexes/`](./Annexes/) ;
 tous les renvois des documents normatifs pointent vers cet emplacement.
 
+La **préséance documentaire ne se lit pas dans cette carte** : elle est fixée, par type de
+question, par la table d'autorité de
+[`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md) §1,
+source unique. La colonne « Normatif ? » ci-dessus n'indique qu'un statut ; elle ne tranche
+aucune contradiction.
+
 L'organisation du dépôt `FromTo Github` (arborescence, rôles des dossiers, règles de
 dépendance, points de vigilance) fait partie du référentiel (§10) : elle se lit dans la
 même session que le paquet à exécuter, avant de créer ou de déplacer du code.
 
-Documents d'ingénierie (hors dossier, font autorité) : `Materiel.pdf`,
+Documents d'ingénierie (hors dossier ; leur rang est fixé par la table d'autorité de la
+planification §1) : `Materiel.pdf`,
 `Implementation.pdf`, `Formulations_Kalman.pdf`, `Materiel/Datasheets/`,
 `Elec/Schéma électrique capteurs.pdf`.
 
@@ -115,8 +128,14 @@ n'existent pas encore : ils sont créés au démarrage du premier paquet de leur
    support de programmation (planification §7, règles 5 à 7 ; référentiel §2.2, règle 6).
 4. Un paquet est `terminé` lorsque ses critères d'acceptation sont vérifiés **et** que sa
    note de passation est rédigée (planification §7, règles 3 et 4).
-5. En cas de contradiction entre deux documents : appliquer la préséance du §1 de la
+5. En cas de contradiction entre deux documents : appliquer la table d'autorité du §1 de la
    planification et signaler l'écart dans la note de passation.
+6. Toute valeur non vérifiée utilisée en code est enregistrée au registre
+   [`Suivi_Valeurs_Et_Sources.md`](./Suivi_Valeurs_Et_Sources.md) avec sa provenance, son
+   niveau, son impact et son juge de paix, et marquée `PROVISOIRE V-nn`. Les règles
+   (échelle, portes, gouvernance) sont dans le référentiel §2.3.
+7. Une valeur ne passe à `figée` que sur **validation humaine**, avec propagation dans le
+   même commit (document d'étape, code, note de passation, journal du registre).
 
 ---
 
@@ -129,7 +148,10 @@ n'existent pas encore : ils sont créés au démarrage du premier paquet de leur
 2. Mettre à jour le §1 de ce fichier : état du paquet, date, lien vers la note, commit.
 3. Si un jalon vient d'être évalué, renseigner son état et la décision au §1.
 4. Mettre à jour la ligne « **Prochain paquet de travail** ».
-5. Si le déclencheur d'un point du §6 a été atteint au cours du paquet, le trancher ou le
+5. Mettre à jour le registre [`Suivi_Valeurs_Et_Sources.md`](./Suivi_Valeurs_Et_Sources.md) :
+   doutes clos portés au journal, doutes non clos reportés dans la note de passation, et
+   vérification qu'aucun doute bloquant n'est ouvert sur le périmètre du paquet.
+6. Si le déclencheur d'un point du §6 a été atteint au cours du paquet, le trancher ou le
    replanifier explicitement : un point tranché quitte le §6, sa décision rejoint le
    document qui fait foi et le journal de l'annexe concernée.
 
@@ -163,7 +185,6 @@ n'existent pas encore : ils sont créés au démarrage du premier paquet de leur
 |---|---|---|---|
 | Destination des contrats d'interface (`Reference_Technique_Etape_1_Capteurs.md` §7 et Annexe C) | transfert de la spécification des types au document de l'étape 2 (l'étape 1 ne conservant que §7.1 et les renvois), ou conservation pérenne dans l'étape 1 | l'étape 2 doit pouvoir spécifier ses types sans dépendre du document d'une autre étape, et le paquet `1.2` doit figer ses logs sans attendre | `C1.3` (décision consignée dans la note de passation) |
 | Destination des livrables du paquet `1.3` | jeux de données hors dépôt + catalogue versionné (p. ex. `test/fixtures/` et répertoire externe documenté) ; chemin du parseur unique ; emplacement du rapport de caractérisation ; support de consignation des σ (document du dépôt, pas `Formulations_Kalman.pdf`) | le paquet `2.1` doit pouvoir référencer ses entrées par un chemin unique (référentiel §2.2, règle 4) | `C1.3` |
-| Préséance unique entre documents | une seule table (dans `Planification` §1 ou `Suivi` §3) incluant les documents d'ingénierie, les autres documents y renvoyant ; la ligne « organisation du dépôt `FromTo Github` » figure déjà dans `Planification` §1 depuis la fusion de l'ancien document d'organisation dans le référentiel | toute contradiction entre documents doit pouvoir être tranchée par une règle écrite | avant la première divergence réelle (autre session possible) |
 
 ---
 
