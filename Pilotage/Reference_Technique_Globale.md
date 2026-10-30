@@ -1,6 +1,6 @@
 # Référentiel technique global — étapes et paquets
 
-*Dernière révision : 2026-10-30 09:49*
+*Dernière révision : 2026-10-30 10:27*
 
 > **Rôle du document.** Référentiel technique **unique** du développement des capteurs, du
 > filtre de Kalman et de leur intégration dans le dirigeable autonome. Il décrit le contenu
@@ -167,6 +167,7 @@ les capteurs hors périmètre (GPS PA1010D, ultrasons) ; la livraison des types 
 **Point de reprise :** `C1.1`  
 **Jalon associé :** `J1`
 
+<a id="paquet-1-2"></a>
 ### Paquet 1.2 — Acquisition multi-capteurs
 
 **Périmètre :**
@@ -177,6 +178,19 @@ les capteurs hors périmètre (GPS PA1010D, ultrasons) ; la livraison des types 
 - vérifier l'arbitrage du bus en lecture concurrente ;
 - préparer l'intégration de CMPS12 et UWB dans le même schéma ;
 - utiliser une simulation de certains capteurs si nécessaire.
+
+**Entrées :** bancs, classes et `CapteursConfig.h` validés au paquet `1.1` (configuration
+de référence, tables d'instances) ; machine de phases, contrat de trame canonique et
+contrat du tampon d'émission démontrés en `1.1` (document d'étape §1.3, §5.2) ; bus I2C
+partagé et câblage réels ; port télémétrie sol `Serial3` (`Materiel` §5.4) pour les
+commandes de session (`CMD_START`, `CMD_LOG_STOP`) ; documents d'ingénierie pour les
+ports et les bus (`Materiel` §5.4, `Implementation` §5.1).
+
+**Hors périmètre :** la caractérisation métrologique et les jeux de données (paquet
+`1.3`) ; toute broche d'interruption (règle §0 du document d'étape : polling non
+bloquant) ; toute modification du firmware ; le filtre de Kalman et les types
+d'estimation (étape 2) ; l'intégration au PlatformIO global (paquet `3.1`) ; capteurs
+hors périmètre (GPS PA1010D, ultrasons).
 
 **Livrables :**
 
@@ -195,6 +209,7 @@ les capteurs hors périmètre (GPS PA1010D, ultrasons) ; la livraison des types 
 
 **Point de reprise :** `C1.2`
 
+<a id="paquet-1-3"></a>
 ### Paquet 1.3 — Caractérisation métrologique et jeux de données
 
 **Périmètre :**
@@ -204,6 +219,16 @@ les capteurs hors périmètre (GPS PA1010D, ultrasons) ; la livraison des types 
 - définir le format de log, les métadonnées et le parseur ;
 - produire des jeux de données réels et des jeux de validation ;
 - documenter les conditions d'acquisition.
+
+**Entrées :** bancs et acquisition multi-capteurs validés par les paquets `1.1` et `1.2` ;
+trame canonique, en-tête versionné et métadonnées `#` (document d'étape §1.3.1) ; logs
+produits par ces paquets ; protocoles de mesure de `Formulations_Kalman` §1.3.5 (synthèse
+métrologique) et §1.3.6 (protocole 10 000 points).
+
+**Hors périmètre :** toute modification des pilotes ou de la configuration (corrections
+justifiées seulement) ; le réglage du filtre et l'exploitation des valeurs par le filtre
+(étape 2) ; les jeux de données volumineux dans le dépôt (planification §7, règle 7) ;
+toute broche d'interruption ; toute modification du firmware.
 
 **Livrables :**
 
@@ -234,6 +259,7 @@ les capteurs hors périmètre (GPS PA1010D, ultrasons) ; la livraison des types 
 **Détail d'implémentation :** `Reference_Technique_Etape_2_Kalman.md` *(à produire au
 démarrage du paquet `2.1`)*.
 
+<a id="paquet-2-1"></a>
 ### Paquet 2.1 — Validation indépendante du filtre
 
 **Périmètre :**
@@ -300,6 +326,7 @@ types d'estimation figés.
 > Le jalon `J3` n'est évalué **qu'après `C2.2`**, pas après `C2.1`
 > ([`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md) §5).
 
+<a id="paquet-2-2"></a>
 ### Paquet 2.2 — Validation matérielle du filtre sur banc autonome
 
 **Périmètre :**
@@ -345,6 +372,7 @@ publique du filtre.
 **Détail d'implémentation :** `Reference_Technique_Etape_3_Integration.md` *(à produire au
 démarrage du paquet `3.1`)*.
 
+<a id="paquet-3-1"></a>
 ### Paquet 3.1 — Intégration dans le PlatformIO global
 
 **Périmètre :**
@@ -380,6 +408,7 @@ sur cible (paquets `3.2` et `3.3`).
 
 **Point de reprise :** `C3.1`
 
+<a id="paquet-3-2"></a>
 ### Paquet 3.2 — Tests multi-capteurs sur cible
 
 **Périmètre :**
@@ -411,6 +440,7 @@ références d'acquisition des paquets `1.2`/`1.3`.
 
 **Point de reprise :** `C3.2`
 
+<a id="paquet-3-3"></a>
 ### Paquet 3.3 — Tests d'intégration Kalman sur cible
 
 **Périmètre :**
@@ -458,6 +488,7 @@ l'optimisation temps réel (paquet `4.1`) ; la validation système (paquet `6.1`
 **Détail d'implémentation :** `Reference_Technique_Etape_4_Temps_Reel.md` *(à produire au
 démarrage du paquet `4.1`)*.
 
+<a id="paquet-4-1"></a>
 ### Paquet 4.1 — Ordonnancement et horodatage
 
 **Périmètre :**
@@ -505,6 +536,7 @@ fonctionnelle ; les nouvelles fonctions de filtrage.
 **Détail d'implémentation :** `Reference_Technique_Etape_5_Profilage.md` *(à produire au
 démarrage du paquet `5.1`)*.
 
+<a id="paquet-5-1"></a>
 ### Paquet 5.1 — Profilage CPU, mémoire et latence
 
 **Périmètre :**
@@ -517,7 +549,7 @@ démarrage du paquet `5.1`)*.
 - documenter les limites.
 
 **Entrées :** firmware intégré et optimisé (paquet `4.1`) ; environnement de profilage
-(`bench/banc_cpu` ou équivalent) ; budgets temps, mémoire et latence de
+(`bench/banc_cpu`) ; budgets temps, mémoire et latence de
 `Implementation.pdf`.
 
 **Hors périmètre :** modification structurelle des bibliothèques (corrections justifiées
@@ -552,6 +584,7 @@ seulement) ; l'optimisation temps réel elle-même (paquet `4.1`) ; la validatio
 **Détail d'implémentation :** `Reference_Technique_Etape_6_Validation.md` *(à produire au
 démarrage du paquet `6.1`)*.
 
+<a id="paquet-6-1"></a>
 ### Paquet 6.1 — Validation système
 
 **Périmètre :**

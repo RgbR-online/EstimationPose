@@ -6,15 +6,15 @@
 > Ce fichier conserve les **pistes écartées**, les **variantes** et l'**historique des
 > décisions** de l'étape 1. Il n'est **jamais** une spécification : aucune de ses lignes ne
 > doit être implémentée. Le support de programmation de l'étape 1 est
-> [`Reference_Technique_Etape_1_Capteurs.md`](./Reference_Technique_Etape_1_Capteurs.md) ;
-> le point d'entrée des sessions est [`Suivi_Avancement.md`](./Suivi_Avancement.md).
+> [`Reference_Technique_Etape_1_Capteurs.md`](../Reference_Technique_Etape_1_Capteurs.md) ;
+> le point d'entrée des sessions est [`Suivi_Avancement.md`](../Suivi_Avancement.md).
 >
 > Les statuts `Adopté` sont rappelés pour mémoire : la décision qui fait foi est celle du
 > document de référence. En cas de contradiction, **le document de référence fait foi**.
 
 > **Document compagnon** de
-> [`Reference_Technique_Etape_1_Capteurs.md`](./Reference_Technique_Etape_1_Capteurs.md).
-> Planification : [`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md).
+> [`Reference_Technique_Etape_1_Capteurs.md`](../Reference_Technique_Etape_1_Capteurs.md).
+> Planification : [`Planification_Etapes_Paquets_Jalons.md`](../Planification_Etapes_Paquets_Jalons.md).
 > Chaque entrée indique son statut, ses avantages, ses inconvénients et, le cas échéant, la
 > condition qui la rendrait pertinente.
 
@@ -244,7 +244,7 @@ faux doublon ni faux compte.
 projet de test qui n'utilise aucune des deux.
 
 **Statut.** **Adopté** — référence étape 1 §1.2.1 et Annexe A : les prédicats combinent `actif`, le
-drapeau de famille et `CAP_TEST_CIBLE` ; `i2cDoublon()` vit dans `commun/cap_predicats.h`.
+drapeau de famille et `CAP_TEST_CIBLE` ; `i2cDoublon()` vit dans `lib/sensors/include/cap_predicats.h`.
 
 ### 4.3 Cohérence `CAP_SIM_ACTIF` / `source`
 
@@ -326,13 +326,16 @@ cible après flash.
 | 2026-10-29 | `FilterState`/`ControlState`/`FilterDiagnostics` extraits dans un fichier de contrats dédié (extraction annulée le 2026-10-30) | Référence étape 1 §7 |
 | 2026-10-30 | Contrats d'interface **réintégrés** dans la référence étape 1 ; fichier `Contrats_Interfaces_Estimation.md` supprimé et archivé | Référence étape 1 §7, Annexe C |
 | 2026-10-30 | Renommage des documents du dossier : `Reference_Technique_*` (technique), `Planification_*` (normatif), `Annexe_*` (non normatif) | `Suivi_Avancement.md` §7 |
+| 2026-10-30 | `cap_predicats.h` hébergé dans `lib/sensors/include/` — le sous-module `commun/` reste inchangé | Référence étape 1 §1.7, Annexe A |
+| 2026-10-30 | Tests natifs des fonctions pures hébergés dans `lib/sensors/test/` (`env:native` de la bibliothèque) ; les `bench/` restent des programmes de banc, sans assertions | Référence étape 1 §1.7 ; `Organisation` §4 à §6 |
+| 2026-10-30 | Références corrigées dans la référence étape 1 §8 (changelog déplacé ici) : « Implementation §2.6 » → **§2.5.1** (fil volant `H_INTN`) ; « Formulations_Kalman §2 » → **§2.2.1** et **§2.2.4** ; « §1.3.5 de Formulations_Kalman » confirmé valide (tableau de synthèse métrologique, cible du report des σ) | Référence étape 1 §8 |
 
 ---
 
 ## 6. Structures d'estimation — options écartées
 
 Options écartées lors de la conception des structures d'estimation. Le détail **retenu** est
-dans [`Reference_Technique_Etape_1_Capteurs.md`](./Reference_Technique_Etape_1_Capteurs.md) §7
+dans [`Reference_Technique_Etape_1_Capteurs.md`](../Reference_Technique_Etape_1_Capteurs.md) §7
 (contrats d'interface) et Annexe C (squelettes).
 
 ### 6.1 État du filtre : `FilterState` dédié

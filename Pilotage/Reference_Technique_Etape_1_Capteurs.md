@@ -1,6 +1,6 @@
 # Référence technique — Étape 1 : capteurs en isolation
 
-*Dernière révision : 2026-10-30 09:49*
+*Dernière révision : 2026-10-30 10:27*
 
 > **Rôle du document.** Spécification d'implémentation de l'**Étape 1**, détaillée depuis le
 > référentiel technique global [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md).
@@ -47,6 +47,12 @@ de [`Materiel/Datasheets/`](../../Materiel/Datasheets/) et le schéma
 
 > **Interruptions hors périmètre :** règle normative unique au **§0** (aucune broche
 > d'interruption avant la soutenance finale ; étude intégralement en polling non bloquant).
+>
+> **Identifiants.** Ce document ne crée aucun identifiant de planification : il reprend
+> ceux de [`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md)
+> (paquets `1.1` à `1.3`, points de reprise `C1.1` à `C1.3`, jalons `J1` et `J2`). Les
+> repères `M0a` à `M4` sont internes à ce document et ne remplacent ni un point de
+> reprise, ni un jalon ; aucun identifiant de planification n'est redéfini ici.
 
 ---
 
@@ -113,7 +119,7 @@ et le dépôt `FromTo Github`, qui ne sont que des **précédents non normatifs*
 servent à repérer des idées, jamais à établir une exigence. Une idée issue du code n'est
 retenue qu'après évaluation de sa pertinence au regard de (1) et (2) (les idées écartées
 sont consignées dans l'annexe
-[`Annexe_Variantes_Et_Historique_Etape_1.md`](./Annexe_Variantes_Et_Historique_Etape_1.md), §7).
+[`Annexe_Variantes_Et_Historique_Etape_1.md`](./Annexes/Annexe_Variantes_Et_Historique_Etape_1.md), §7).
 
 **Broches non encore spécifiées.** Les broches physiques (I2C, UART, LED, interruptions)
 ne sont pas toutes arbitrées. Pour le matériel **existant**, le code fait foi (bus I2C,
@@ -349,7 +355,7 @@ par la série est interchangeable avec le même jeu capturé sur SD. Règles opp
 | :--- | :--- |
 | **Une seule** définition de colonnes (sur-ensemble des grandeurs des familles compilées, ordre figé dans `log_capteurs.h`), une précision fixée par colonne (`.`, jamais de virgule décimale locale) ; colonne `type` discriminant la grandeur de chaque ligne ; cellules non applicables **vides** — une ligne ne remplit que les colonnes de sa grandeur | Deux producteurs = deux dérives possibles ; la parité série/SD n'est vérifiable que si le format est défini une fois ; le schéma rectangulaire unique garde un parseur trivial (lecture puis filtre sur `type`) |
 | Fin de ligne `\n` (jamais `\r\n`), ASCII sans BOM | Le flux série et le fichier SD doivent être identiques octet pour octet |
-| En-tête CSV + lignes `#` de métadonnées (`format_ver`, mode, label de session, date de build, sémantique et unité des colonnes **par `type`**) en tête **de chaque puits** (création du fichier SD, premier envoi série après reset) | Le parseur ignore `#`, lit `format_ver` et se cale sur l'en-tête : il ne code **aucune position de colonne en dur**. Le *hash* de configuration n'est **pas** requis à l'Étape 1 (piste, cf. §4.6 de l'annexe [`Annexe_Variantes_Et_Historique_Etape_1.md`](./Annexe_Variantes_Et_Historique_Etape_1.md)) |
+| En-tête CSV + lignes `#` de métadonnées (`format_ver`, mode, label de session, date de build, sémantique et unité des colonnes **par `type`**) en tête **de chaque puits** (création du fichier SD, premier envoi série après reset) | Le parseur ignore `#`, lit `format_ver` et se cale sur l'en-tête : il ne code **aucune position de colonne en dur**. Le *hash* de configuration n'est **pas** requis à l'Étape 1 (piste, cf. §4.6 de l'annexe [`Annexe_Variantes_Et_Historique_Etape_1.md`](./Annexes/Annexe_Variantes_Et_Historique_Etape_1.md)) |
 | Aucun texte libre, bannière ni suffixe décoratif sur le puits série en VALIDATION | Un seul caractère parasite casse le parseur ; le journal humain est réservé au mode DEV |
 | Colonnes `t_us` = `micros()` **brut** (`uint32_t`), `id` (instance, bloc 3) et `seq` — compteur propre à la **source de mesure** : numéro de séquence natif du rapport quand le capteur en publie un (BNO085, un par type de rapport, §2.4), compteur local de l'instance sinon (BMP581) | Même horloge dans les deux puits ; rebouclage modulo et pertes traitées identiquement sur flux et sur fichier ; le seq natif détecte les rapports perdus **par grandeur** (§2.8), ce qu'un compteur de lignes ne peut pas faire |
 | Série à `CAP_LOG_SERIAL_BAUD = 2000000` | Une ligne par événement : 5 rapports BNO085 à 100 Hz ≈ 5 lignes/10 ms de ~60 à 75 o ≈ **30 à 37,5 ko/s (~15 à 19 % du lien)** ; 115200 bauds (11,5 ko/s) sature et tronque les lignes ; à 200 Hz, débrayer les grandeurs inutiles (drapeaux `CAP_LOG_*`) |
@@ -664,12 +670,12 @@ FromTo Github/
 │   │   ├── led_status.h          (motifs LED 13, non bloquant, `Implementation` §6.5 — §1.3.3)
 │   │   ├── cap_simule.h          (rejeu de dataset — paquet 1.2, DEV uniquement)
 │   │   └── unites_conversions.h  (quaternion ↔ Euler, altitude ISA ; échelles Q = décodeur brut DEV)
-│   └── src/
+│   ├── src/
+│   └── test/                     (tests natifs des fonctions pures — `env:native`, **obligatoire**, §6)
 ├── bench/
 │   ├── test_bno085/              ← projet PlatformIO teensy41 autonome
 │   │   ├── platformio.ini        (lib_deps épinglées : Adafruit BNO08x)
-│   │   ├── include/  src/        ← main.cpp + imuBNO085.*
-│   │   └── test/                 (tests des fonctions pures — **obligatoire**, §6)
+│   │   └── include/  src/        ← main.cpp + imuBNO085.* (programme de banc, sans assertions)
 │   ├── test_bmp581/              ← idem (lib_deps épinglées : DFRobot BMP58X)
 │   │   └── ...
 │   ├── test_cmps12/              ← consolidation / conformité (optionnel)
@@ -680,7 +686,7 @@ Bibliothèques retenues (déjà validées par les sketches existants) : `Adafrui
 (SH-2/SHTP) et `DFRobot_BMP58X`, **versions épinglées** (tag ou commit) pour que le build
 soit reproductible. Le choix de bibliothèque n'est pas un sujet d'Étape 1 : les variantes
 envisagées (API Bosch `BMP5` via SparkFun BMP581, etc.) sont consignées dans l'annexe
-[`Annexe_Variantes_Et_Historique_Etape_1.md`](./Annexe_Variantes_Et_Historique_Etape_1.md).
+[`Annexe_Variantes_Et_Historique_Etape_1.md`](./Annexes/Annexe_Variantes_Et_Historique_Etape_1.md).
 
 Les fichiers communs ne contiennent que ce qui est réellement partagé par au moins deux
 capteurs — les spécificités (séquence d'initialisation du BMP581, protocole SHTP) restent
@@ -734,15 +740,14 @@ build_flags = -std=gnu++17 -I../config -I../commun
               -D CAP_TEST_CIBLE=TEST_IMU_1
 lib_deps = adafruit/Adafruit BNO08x@<version testée>   ; tag ou commit, jamais une plage
 monitor_speed = 2000000
-
-[env:native]
-platform = native
-build_flags = -std=gnu++17 -I../commun
 ```
 
-L'environnement `native` n'est pas optionnel : il exécute les tests des fonctions pures et
-des prédicats `constexpr` (§6 « fini », §1.7), qui sont la seule protection contre une erreur de
-table ou de conversion invisible sur cible.
+Les **tests natifs** vivent dans `lib/sensors/test/` (§1.7) : la bibliothèque porte son
+propre `platformio.ini` définissant l'environnement `native` (`platform = native`,
+`build_flags = -std=gnu++17`), compilé et exécuté sur hôte sans Arduino. Cet environnement
+n'est pas optionnel : il exécute les tests des fonctions pures et des prédicats
+`constexpr` (§6 « fini »), qui sont la seule protection contre une erreur de table ou de
+conversion invisible sur cible.
 
 ---
 
@@ -826,7 +831,7 @@ la spécification (flux internes, bootloader) et restent inutilisés ici.
 4. Table des échelles Q (§2.4) — **usage exclusif** : décodeur SHTP brut du mode DEV
    (analyseur logique). Inutile au pilote, qui reçoit des `float` de la bibliothèque ; à
    supprimer si aucun décodeur brut n'est écrit (cf. §7 de l'annexe
-   [`Annexe_Variantes_Et_Historique_Etape_1.md`](./Annexe_Variantes_Et_Historique_Etape_1.md)).
+   [`Annexe_Variantes_Et_Historique_Etape_1.md`](./Annexes/Annexe_Variantes_Et_Historique_Etape_1.md)).
 
 ### 2.6 Classe capteur `IMUBNO085 : public IMU`
 Moule identique à `IMUCMPS12` (héritage `IMU`, `begin()`, `read(ts, vals, change)`).
@@ -1282,7 +1287,7 @@ l'arborescence `NvCapteurs` → `Capteurs` (PlatformIO) est migrée.
 > types n'est livré à l'Étape 1** : seules les contraintes du §7.1 sont opposables. Le §5.1
 > décrit la **mémoire des mesures** ; ce chapitre décrit **l'état estimé** et la façon dont
 > il est consommé. Les variantes écartées et les idées non retenues sont consignées dans
-> l'annexe [`Annexe_Variantes_Et_Historique_Etape_1.md`](./Annexe_Variantes_Et_Historique_Etape_1.md),
+> l'annexe [`Annexe_Variantes_Et_Historique_Etape_1.md`](./Annexes/Annexe_Variantes_Et_Historique_Etape_1.md),
 > §6 (structures d'estimation) et §7 (idées issues du code). Les squelettes de code sont en
 > **Annexe C**.
 
@@ -1479,14 +1484,9 @@ d'ingénierie, la présente feuille, puis les précédents de code (non normatif
 **Précédents non normatifs.** `../FromTo Github/` (en-têtes `Capteurs/*.h`, `uwb.h`,
 `txt/change_defaut_addr.txt`) et `NvCapteurs/` servent uniquement à repérer des idées,
 évaluées dans l'annexe
-[`Annexe_Variantes_Et_Historique_Etape_1.md`](./Annexe_Variantes_Et_Historique_Etape_1.md) §7.
-La séquence de changement d'adresse CMPS12 y
-trouve son origine mais doit être **validée sur `cmps12_doc.pdf`**.
-
-**Références corrigées dans cette version.** « Implementation §2.6 » (§2.3) devient
-**§2.5.1** (fil volant `H_INTN`) ; « Formulations_Kalman §2 » (§2.5) devient **§2.2.1** et
-**§2.2.4** ; « §1.3.5 de Formulations_Kalman » est **valide** (tableau de synthèse
-métrologique) et désigne désormais la cible du report des σ mesurées.
+[`Annexe_Variantes_Et_Historique_Etape_1.md`](./Annexes/Annexe_Variantes_Et_Historique_Etape_1.md) §7.
+La séquence de changement d'adresse CMPS12 y trouve son origine mais doit être
+**validée sur `cmps12_doc.pdf`**.
 
 ---
 
@@ -1639,7 +1639,6 @@ constexpr bool altiActive(const CfgAlti& c) {
 // trame canonique = CAP_LOG_SERIAL_PORT (broches À DÉFINIR) ; télémétrie = Serial3.
 #define CAP_PIN_BNO085_RST -1    // non routé (PCB actuel) — À DÉFINIR sur le schéma Elec
 #define CAP_I2C_CLOCK_HZ   400000
-#define CAP_PIN_BNO085_RST -1    // non routé (PCB actuel)
 #define CAP_PIN_BNO085_INT -1    // H_INTN non routé -> polling
 #define CAP_PIN_BMP581_INT -1    // INT non routé -> polling
 
@@ -1832,7 +1831,7 @@ static_assert(!(CAP_DEV_REARM && CAP_MODE_RUNTIME != CAP_MODE_DEV),
 
 // ---------- 10. Garanties de compilation (socle ; placées en fin de fichier car elles
 //              testent aussi les blocs 11/12/13) ----------
-// i2cDoublon() est déclaré dans commun/cap_predicats.h — en-tête PUR, sans Arduino :
+// i2cDoublon() est déclaré dans lib/sensors/include/cap_predicats.h — en-tête PUR, sans Arduino :
 //   #include "cap_predicats.h"
 template<typename T, int N, typename Pred>
 constexpr int nbActifs(const T (&t)[N], Pred pred) {
@@ -1887,7 +1886,7 @@ static_assert(!sourceSimuleActive(CFG_IMU, imuActive) &&
               !sourceSimuleActive(CFG_ALTI, altiActive),
               "SOURCE_SIMULE réservé au mode DEV (CAP_SIM_ACTIF)");
 #endif
-// Anti-doublon (bus, adresse) : i2cDoublon() vit dans commun/cap_predicats.h — en-tête
+// Anti-doublon (bus, adresse) : i2cDoublon() vit dans lib/sensors/include/cap_predicats.h — en-tête
 // PUR, sans dépendance Arduino, testable sur hôte (cf. §1.7).
 static_assert(!i2cDoublon(CFG_IMU, imuActive) && !i2cDoublon(CFG_ALTI, altiActive),
               "doublon (bus, adresse)");

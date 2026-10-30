@@ -1,5 +1,7 @@
 # Organisation des capteurs et du filtre de Kalman dans `FromTo Github`
 
+*Dernière révision : 2026-10-30 10:27*
+
 ## 1. Objet du document
 
 Ce document décrit l'organisation retenue pour développer les capteurs et le filtre de Kalman **dans le dépôt Git existant `FromTo Github`**, puis pour les intégrer progressivement au firmware.
@@ -55,7 +57,8 @@ FromTo Github/                 <- dépôt Git et projet PlatformIO firmware
 │   ├── sensors/               <- bibliothèque capteurs
 │   │   ├── library.json
 │   │   ├── include/
-│   │   └── src/
+│   │   ├── src/
+│   │   └── test/              <- tests natifs des fonctions pures
 │   └── kalman/                <- bibliothèque filtre
 │       ├── library.json
 │       ├── include/
@@ -66,7 +69,7 @@ FromTo Github/                 <- dépôt Git et projet PlatformIO firmware
 │   ├── test_bmp581/           <- projet PlatformIO autonome
 │   ├── test_all/              <- acquisition multi-capteurs
 │   ├── kalman_replay/         <- rejeu de données, natif et/ou cible
-│   └── banc_cpu/              <- profilage, si non conservé dans test/
+│   └── banc_cpu/              <- profilage
 ├── test/                      <- tests automatisés uniquement
 ├── commun/                    <- sous-module existant, inchangé
 ├── .gitignore
@@ -117,7 +120,7 @@ Ces règles doivent être respectées par tous les agents.
    - Aucun code de pilote ou de filtre ne doit être dupliqué dans `src/` ou `include/`.
 
 5. **`test/` contient des assertions.**
-   - Les tests natifs du filtre peuvent vivre dans `lib/kalman/test/` ou dans `test/`.
+   - Les tests natifs du filtre peuvent vivre dans `lib/kalman/test/` ou dans `test/` ; les tests natifs des fonctions pures capteurs vivent dans `lib/sensors/test/`.
    - Les tests matériels peuvent cibler la Teensy, mais ils doivent produire un résultat de test, pas un programme interactif permanent.
 
 6. **`commun/` reste la source partagée existante.**
@@ -139,7 +142,7 @@ La planification de référence est définie dans [`Planification_Etapes_Paquets
 | `lib/sensors/` : squelette, `library.json`, interfaces, pilotes BNO085 et BMP581 | `README.md` si les instructions de banc y sont ajoutées | `src/`, `include/`, `main/` du firmware |
 | `bench/test_bno085/` avec son `platformio.ini` | `.gitignore` si nécessaire | `platformio.ini` racine, sauf exclusion explicite de `bench/` |
 | `bench/test_bmp581/` avec son `platformio.ini` | | `commun/` |
-| Tests des fonctions pures dans `lib/sensors/test/` ou `test/` | | |
+| Tests des fonctions pures dans `lib/sensors/test/` | | |
 | `lib/sensors/include/CapteursConfig.h` comme source unique de configuration | | |
 
 **Point de reprise :** `C1.1`  
@@ -149,7 +152,7 @@ La planification de référence est définie dans [`Planification_Etapes_Paquets
 
 | Créé | Modifié | Inchangé |
 |---|---|---|
-| `bench/test_all/` ou `bench/acquisition/` avec son `platformio.ini` | `lib/sensors/` pour la coordination des instances | `src/`, `include/`, `main/` du firmware |
+| `bench/test_all/` avec son `platformio.ini` | `lib/sensors/` pour la coordination des instances | `src/`, `include/`, `main/` du firmware |
 | Structures de mémorisation des mesures, si nécessaire | `CapteursConfig.h` pour les instances actives | `platformio.ini` racine |
 | Tests de cohérence des tables et des conversions | | `commun/` |
 
@@ -244,7 +247,7 @@ La planification de référence est définie dans [`Planification_Etapes_Paquets
 
 | Créé | Modifié | Inchangé |
 |---|---|---|
-| Résultats de profilage documentés | `bench/banc_cpu/` ou `test/banc_cpu/` selon l'emplacement retenu | `lib/kalman/` et `lib/sensors/` : uniquement des corrections justifiées |
+| Résultats de profilage documentés | `bench/banc_cpu/` | `lib/kalman/` et `lib/sensors/` : uniquement des corrections justifiées |
 | | `platformio.ini` pour l'environnement de profilage | `commun/` |
 | | `README.md` pour les résultats et les limites | |
 

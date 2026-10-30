@@ -1,6 +1,6 @@
 # Planification — étapes, paquets de travail et jalons
 
-*Dernière révision : 2026-10-30 09:49*
+*Dernière révision : 2026-10-30 10:27*
 
 > **Statut :** normatif de pilotage. Les identifiants, les paquets et les jalons peuvent
 > être précisés sans changer le modèle à trois niveaux.
@@ -265,6 +265,7 @@ elle doit contenir au minimum :
 ## Ce qui ne fonctionne pas ou reste incomplet
 ## Fichiers créés ou modifiés
 ## Décisions prises
+## Écarts et contradictions détectés
 ## État des builds et des tests
 ## Prochain paquet de travail
 ## Zones à ne pas modifier
@@ -279,7 +280,8 @@ La note doit être compréhensible de manière autonome.
 1. Un agent travaille sur **un seul paquet de travail à la fois**.
 2. Un paquet se termine à son **point de reprise**.
 3. L'agent ne commence pas le paquet suivant sans note de passation.
-4. Un paquet n'est terminé que si ses critères d'acceptation sont vérifiés.
+4. Un paquet n'est terminé que si ses critères d'acceptation sont vérifiés **et** que sa
+   note de passation est rédigée (§6).
 5. Les éléments hors périmètre sont explicitement listés et ne sont pas implémentés.
 6. Les bibliothèques sont les sources uniques de vérité ; aucun code n'est dupliqué dans les bancs ou le firmware.
 7. Les données volumineuses, les documents confidentiels et les artefacts générés restent hors du dépôt.

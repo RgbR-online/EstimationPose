@@ -7,9 +7,9 @@
 > l'**historique** du référentiel technique global. Il n'est **jamais** une spécification :
 > aucune de ses lignes ne doit être implémentée.
 >
-> Documents de programmation : [`Suivi_Avancement.md`](./Suivi_Avancement.md) (point
-> d'entrée), [`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md)
-> (normatif de pilotage), [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md)
+> Documents de programmation : [`Suivi_Avancement.md`](../Suivi_Avancement.md) (point
+> d'entrée), [`Planification_Etapes_Paquets_Jalons.md`](../Planification_Etapes_Paquets_Jalons.md)
+> (normatif de pilotage), [`Reference_Technique_Globale.md`](../Reference_Technique_Globale.md)
 > (référentiel technique) et `Reference_Technique_Etape_<n>_*.md` (détail par étape).
 >
 > En cas de contradiction avec un document normatif, **le document normatif fait foi**.
@@ -34,7 +34,7 @@ raisonnements et pour éviter qu'un futur agent ne « redécouvre » une piste d
 | **Diagramme de séquencement dupliqué** dans le référentiel global | **Rejeté** | Copie mot pour mot du diagramme de la planification ; deux sources divergentes possibles pour un même séquencement | Diagramme conservé uniquement dans la planification §3 (copie gelée au §4 ci-dessous) |
 | **Table des jalons dupliquée** dans le référentiel global | **Rejeté** | Même contenu reformulé ; risque d'incohérence sur les positions `C2.1`/`C2.2` | Table conservée uniquement dans la planification §5 (copie gelée au §4 ci-dessous) |
 | **Renommage avec préfixes numériques** (`00_`, `10_`, `20_`, `90_`) pour imposer l'ordre de lecture | **Différé** | Renommage plus lourd, liens à maintenir à chaque nouvelle étape ; l'ordre de lecture est déjà imposé par `Suivi_Avancement.md` §2 | Réévaluable si le nombre de fichiers augmente |
-| **Suppression pure et simple** de l'ancien fichier de contrats, sans archive | **Rejeté** | Perte de la trace des décisions ; une copie gelée ne coûte rien | `Annexe_Archive_Contrats_Interfaces.md` |
+| **Suppression pure et simple** de l'ancien fichier de contrats, sans archive | **Rejeté** | Perte de la trace des décisions ; une copie gelée ne coûte rien | `Annexe_Archive_Contrats_Interfaces.md` — copie gelée d'abord conservée, puis **allégée le 2026-10-30** (bandeau + table de correspondance) ; le contenu intégral reste dans l'historique Git du dépôt de documentation (`Programmation/`, commit initial du 2026-10-30) |
 
 ---
 
@@ -50,6 +50,7 @@ raisonnements et pour éviter qu'un futur agent ne « redécouvre » une piste d
 | 2026-10-30 | `Jalon associé : J3` retiré du paquet `2.1` : `J3` est évalué après `C2.2` uniquement | `Reference_Technique_Globale.md` §4 |
 | 2026-10-30 | `Suivi_Avancement.md` créé comme point d'entrée unique des sessions | `Suivi_Avancement.md` |
 | 2026-10-30 | Convention de nommage : `Planification_*` (normatif), `Reference_Technique_*` (technique), `Annexe_*` (non normatif) | tous les documents du dossier |
+| 2026-10-30 | Dossier renommé `Pilotage/` ; annexes regroupées dans `Annexes/` ; annexe archive allégée, sa copie intégrale conservée dans l'historique Git du dépôt de documentation | `Suivi_Avancement.md` §7, §8 ; `Annexe_Archive_Contrats_Interfaces.md` |
 
 ---
 
