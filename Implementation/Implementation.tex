@@ -1,0 +1,58 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{amsmath}
+\setcounter{MaxMatrixCols}{20}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{geometry}
+\geometry{a4paper, margin=2.5cm}
+\usepackage{subfiles}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    citecolor=blue!70!black,
+    urlcolor=blue!70!black
+}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue!80!black}\bfseries,
+    commentstyle=\color{green!50!black}\itshape,
+    stringstyle=\color{red!70!black},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    stepnumber=1,
+    numbersep=8pt,
+    frame=single,
+    breaklines=true,
+    captionpos=b,
+    language=C++
+}
+
+\title{Spécifications et Architecture d'Implémentation Algorithmique\\
+\large Filtre de Kalman et Fusion Sensorielle pour Dirigeable Autonome (Teensy 4.1)}
+\author{Grégory Barou}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\subfile{sections/01_architecture_logicielle.tex}
+\subfile{sections/02_traitement_mesures_capteurs.tex}
+\subfile{sections/03_geometrie_calibrations_alignement.tex}
+\subfile{sections/04_perturbations_environnementales.tex}
+\subfile{sections/05_temps_reel_teensy.tex}
+\subfile{sections/06_surete_fonctionnement_modes_degrades.tex}
+
+\end{document}
+

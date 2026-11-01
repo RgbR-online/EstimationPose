@@ -1,0 +1,252 @@
+\documentclass[../Formulations_Kalman.tex]{subfiles}
+\begin{document}
+
+\appendix
+
+\section{Stabilité Numérique et Algèbre Matricielle de la Covariance}
+\label{annexe:stabilite_numerique}
+
+Cette annexe rassemble les démonstrations formelles des algorithmes de stabilisation numérique appliqués à la matrice de covariance d'erreur $P$ dans le cadre de l'implémentation embarquée sur microcontrôleur en arithmétique à virgule flottante (\texttt{float32}).
+
+\subsection{Dérivation formelle de la Forme Stabilisée de Joseph}
+\label{annexe:joseph}
+
+Dans la formulation théorique du filtre de Kalman, l'équation de mise à jour de la matrice de covariance d'erreur est usuellement présentée sous sa forme canonique compacte :
+\begin{equation}
+P_{k+1\mid k+1} = (I - K_{k+1} H_{k+1}) P_{k+1\mid k}
+\label{eq:cov_canonique}
+\end{equation}
+Bien que mathématiquement exacte sous l'hypothèse d'une précision arithmétique infinie avec le gain optimal $K_{k+1} = P_{k+1\mid k} H_{k+1}^T S_{k+1}^{-1}$, cette équation présente une instabilité numérique notoire sur calculateur embarqué. En raison des erreurs d'arrondi et des annulations soustractives, la soustraction matricielle détruit rapidement la symétrie de $P$ et peut conduire à l'apparition de valeurs propres négatives non physiques ($P \not\succeq 0$), provoquant la divergence irréversible du filtre.
+
+\paragraph{Théorème (Forme de Joseph) :}
+Pour \textbf{tout} gain de correction $K_{k+1}$ (qu'il soit optimal au sens de Kalman ou perturbé numériquement), la matrice de covariance d'erreur a posteriori s'exprime rigoureusement sous la forme :
+\begin{equation}
+\boxed{P_{k+1\mid k+1} = (I - K_{k+1} H_{k+1}) P_{k+1\mid k} (I - K_{k+1} H_{k+1})^T + K_{k+1} R_{k+1} K_{k+1}^T}
+\label{eq:joseph_form}
+\end{equation}
+
+\paragraph{Démonstration formelle :}
+Définissons l'erreur d'estimation a posteriori :
+\begin{equation}
+e_{k+1\mid k+1} = x_{k+1} - \hat{x}_{k+1\mid k+1}
+\end{equation}
+En substituant l'équation de correction de l'état $\hat{x}_{k+1\mid k+1} = \hat{x}_{k+1\mid k} + K_{k+1} y_{k+1}$ et l'expression de l'innovation $y_{k+1} = z_{k+1} - H_{k+1}\hat{x}_{k+1\mid k}$, il vient :
+\begin{equation}
+e_{k+1\mid k+1} = x_{k+1} - \left( \hat{x}_{k+1\mid k} + K_{k+1} (z_{k+1} - H_{k+1} \hat{x}_{k+1\mid k}) \right)
+\end{equation}
+Le modèle de mesure s'écrit $z_{k+1} = H_{k+1} x_{k+1} + v_{k+1}$, où le bruit de mesure $v_{k+1} \sim \mathcal{N}(0, R_{k+1})$ est non corrélé à l'erreur d'estimation a priori $e_{k+1\mid k} = x_{k+1} - \hat{x}_{k+1\mid k}$. En factorisant :
+\begin{align}
+e_{k+1\mid k+1} &= (x_{k+1} - \hat{x}_{k+1\mid k}) - K_{k+1} \left( H_{k+1} (x_{k+1} - \hat{x}_{k+1\mid k}) + v_{k+1} \right) \nonumber \\
+&= (I - K_{k+1} H_{k+1}) e_{k+1\mid k} - K_{k+1} v_{k+1}
+\label{eq:erreur_post_dev}
+\end{align}
+La matrice de covariance d'erreur a posteriori est par définition l'espérance mathématique du produit tensoriel de cette erreur avec elle-même :
+\begin{equation}
+P_{k+1\mid k+1} = \mathbb{E}\left[ e_{k+1\mid k+1} e_{k+1\mid k+1}^T \right]
+\end{equation}
+En développant avec l'équation~\eqref{eq:erreur_post_dev} :
+\begin{align}
+P_{k+1\mid k+1} &= \mathbb{E}\left[ \left( (I - KH) e_{k+1\mid k} - K v_{k+1} \right) \left( (I - KH) e_{k+1\mid k} - K v_{k+1} \right)^T \right] \nonumber \\
+&= (I - KH) \, \mathbb{E}\left[ e_{k+1\mid k} e_{k+1\mid k}^T \right] (I - KH)^T \nonumber \\
+&\quad - (I - KH) \, \mathbb{E}\left[ e_{k+1\mid k} v_{k+1}^T \right] K^T \nonumber \\
+&\quad - K \, \mathbb{E}\left[ v_{k+1} e_{k+1\mid k}^T \right] (I - KH)^T \nonumber \\
+&\quad + K \, \mathbb{E}\left[ v_{k+1} v_{k+1}^T \right] K^T
+\end{align}
+Puisque le bruit de mesure $v_{k+1}$ est indépendant de l'état passé et de l'erreur a priori $e_{k+1\mid k}$, les termes croisés s'annulent strictement :
+\begin{equation}
+\mathbb{E}\left[ e_{k+1\mid k} v_{k+1}^T \right] = 0, \qquad \mathbb{E}\left[ v_{k+1} e_{k+1\mid k}^T \right] = 0
+\end{equation}
+Sachant que $\mathbb{E}[e_{k+1\mid k} e_{k+1\mid k}^T] = P_{k+1\mid k}$ et $\mathbb{E}[v_{k+1} v_{k+1}^T] = R_{k+1}$, on aboutit à la forme exacte de Joseph :
+\begin{equation}
+P_{k+1\mid k+1} = (I - K_{k+1} H_{k+1}) P_{k+1\mid k} (I - K_{k+1} H_{k+1})^T + K_{k+1} R_{k+1} K_{k+1}^T \quad \blacksquare
+\end{equation}
+
+\paragraph{Corollaire (Garantie de semi-définition positive inconditionnelle) :}
+Soit $A = (I - K_{k+1} H_{k+1})$ et $B = K_{k+1}$. Pour tout vecteur non nul $u \in \mathbb{R}^n$, la forme quadratique associée à $P_{k+1\mid k+1}$ s'écrit :
+\begin{equation}
+u^T P_{k+1\mid k+1} u = u^T (A P_{k+1\mid k} A^T) u + u^T (B R_{k+1} B^T) u = (A^T u)^T P_{k+1\mid k} (A^T u) + (B^T u)^T R_{k+1} (B^T u)
+\end{equation}
+Puisque la matrice a priori $P_{k+1\mid k} \succeq 0$ est semi-définie positive et que la matrice de bruit $R_{k+1} \succ 0$ est strictement définie positive :
+\begin{equation}
+(A^T u)^T P_{k+1\mid k} (A^T u) \ge 0 \quad \text{et} \quad (B^T u)^T R_{k+1} (B^T u) \ge 0 \implies u^T P_{k+1\mid k+1} u \ge 0
+\end{equation}
+La matrice $P_{k+1\mid k+1}$ est donc \textbf{inconditionnellement semi-définie positive ($P \succeq 0$)}, protégeant mathématiquement le filtre contre toute instabilité divergente en simple précision flottante.
+
+---
+
+\subsection{\texorpdfstring{Théorème de Projection Orthogonale de Frobenius (Symétrisation de $P$)}{Théorème de Projection Orthogonale de Frobenius (Symétrisation de P)}}
+\label{annexe:frobenius}
+
+Même en utilisant la forme de Joseph, l'accumulation de milliers d'itérations en arithmétique 32 bits introduit une dissymétrie infinitésimale sur les termes extradiagonaux ($P_{ij} \neq P_{ji}$). La ré-imposition périodique de la symétrie par la moyenne empirique $P \leftarrow \frac{1}{2}(P + P^T)$ est universellement pratiquée. Nous démontrons ici qu'il ne s'agit pas d'un artifice heuristique mais de l'\textbf{unique projection orthogonale au sens des moindres carrés} sur le sous-espace vectoriel des matrices symétriques.
+
+\paragraph{Cadre géométrique préhilbertien :}
+Soit $\mathcal{M}_n(\mathbb{R})$ l'espace vectoriel des matrices réelles carrées de dimension $n \times n$. On munit cet espace du produit scalaire de Frobenius :
+\begin{equation}
+\langle A, B \rangle_F = \text{Tr}\left(A^T B\right)
+\end{equation}
+La norme induite associée est la norme de Frobenius :
+\begin{equation}
+\|A\|_F = \sqrt{\langle A, A \rangle_F} = \sqrt{\text{Tr}\left(A^T A\right)} = \sqrt{\sum_{i=1}^n \sum_{j=1}^n a_{ij}^2}
+\end{equation}
+Considérons les deux sous-espaces vectoriels fondamentaux :
+\begin{align}
+\mathcal{S}_n(\mathbb{R}) &= \left\{ M \in \mathcal{M}_n(\mathbb{R}) \;\middle|\; M^T = M \right\} \quad \text{(Matrices symétriques)} \\
+\mathcal{A}_n(\mathbb{R}) &= \left\{ M \in \mathcal{M}_n(\mathbb{R}) \;\middle|\; M^T = -M \right\} \quad \text{(Matrices antisymétriques)}
+\end{align}
+
+\paragraph{Lemme 1 (Orthogonalité des sous-espaces) :}
+Les sous-espaces $\mathcal{S}_n(\mathbb{R})$ et $\mathcal{A}_n(\mathbb{R})$ sont orthogonaux au sens du produit scalaire de Frobenius :
+\begin{equation}
+\mathcal{S}_n(\mathbb{R}) \perp \mathcal{A}_n(\mathbb{R})
+\end{equation}
+\textit{Preuve :} Soient $S \in \mathcal{S}_n(\mathbb{R})$ et $A \in \mathcal{A}_n(\mathbb{R})$. En exploitant la commutativité cyclique de la trace et le fait que la trace d'une matrice égale celle de sa transposée :
+\begin{equation}
+\langle S, A \rangle_F = \text{Tr}(S^T A) = \text{Tr}(S A) = \text{Tr}\left((S A)^T\right) = \text{Tr}(A^T S^T) = \text{Tr}((-A) S) = -\text{Tr}(A S) = -\text{Tr}(S A)
+\end{equation}
+D'où $2\,\text{Tr}(S A) = 0 \implies \langle S, A \rangle_F = 0$. $\blacksquare$
+
+\paragraph{Lemme 2 (Décomposition canonique) :}
+Tout élément $P \in \mathcal{M}_n(\mathbb{R})$ se décompose de manière unique en une somme directe orthogonale $P = S_P + A_P$, avec :
+\begin{equation}
+S_P = \frac{P + P^T}{2} \in \mathcal{S}_n(\mathbb{R}), \qquad A_P = \frac{P - P^T}{2} \in \mathcal{A}_n(\mathbb{R})
+\end{equation}
+
+\paragraph{Théorème (Meilleure approximation symétrique) :}
+Pour toute matrice de covariance calculée $P \in \mathcal{M}_n(\mathbb{R})$, la matrice symétrique $M^* \in \mathcal{S}_n(\mathbb{R})$ minimisant la distance quadratique de Frobenius :
+\begin{equation}
+M^* = \arg\min_{M \in \mathcal{S}_n(\mathbb{R})} \|P - M\|_F^2
+\end{equation}
+est unique et donnée exactement par la projection orthogonale :
+\begin{equation}
+\boxed{M^* = \pi_{\mathcal{S}_n}(P) = \frac{P + P^T}{2}}
+\end{equation}
+
+\paragraph{Démonstration :}
+Soit $M \in \mathcal{S}_n(\mathbb{R})$ une matrice symétrique quelconque. En substituant $P = S_P + A_P$ :
+\begin{equation}
+P - M = (S_P - M) + A_P
+\end{equation}
+Puisque $(S_P - M) \in \mathcal{S}_n(\mathbb{R})$ et $A_P \in \mathcal{A}_n(\mathbb{R})$, ces deux termes sont orthogonaux par le Lemme 1. D'après le théorème de Pythagore dans l'espace préhilbertien :
+\begin{equation}
+\|P - M\|_F^2 = \|(S_P - M) + A_P\|_F^2 = \|S_P - M\|_F^2 + \|A_P\|_F^2
+\end{equation}
+Le terme $\|A_P\|_F^2 = \frac{1}{4}\|P - P^T\|_F^2$ est strictement constant et fixé par la matrice $P$ issue du pas de calcul. Par conséquent, la distance $\|P - M\|_F^2$ est minimale si et seulement si :
+\begin{equation}
+\|S_P - M\|_F^2 = 0 \iff M = S_P = \frac{P + P^T}{2} \quad \blacksquare
+\end{equation}
+Cette démonstration prouve que l'opération de symétrisation empirique ne déforme en rien le nuage d'incertitude stochastique : elle constitue le projecteur euclidien optimal préservant l'intégrité probabiliste de la covariance.
+
+---
+
+\newpage
+\section{\texorpdfstring{Validation Statistique des Innovations (Porte de Mahalanobis $\chi^2$)}{Validation Statistique des Innovations (Porte de Mahalanobis Chi-2)}}
+\label{annexe:chi2}
+
+En vol opérationnel réel, le système de navigation est exposé à des perturbations sporadiques destructrices : réflexions parasites multi-trajets sur les balises UWB, décrochages satellitaires sous feuillage dense pour le récepteur GNSS, ou surpressions dynamiques instantanées générées par les pales des hélices sur le baromètre. Cette annexe formalise le critère mathématique optimal d'exclusion de ces mesures aberrantes (\textit{outlier rejection}).
+
+\subsection{\texorpdfstring{Dérivation statistique de la distribution $\chi^2$ par Blanchiment de Cholesky}{Dérivation statistique de la distribution Chi-2 par Blanchiment de Cholesky}}
+
+Soit un vecteur de mesure entrant $z_{k+1} \in \mathbb{R}^m$, où $m = \dim(z_{k+1})$ est la dimension du sous-espace d'observation. L'innovation associée est le résidu d'estimation :
+\begin{equation}
+y_{k+1} = z_{k+1} - H_{k+1} \hat{x}_{k+1\mid k} \in \mathbb{R}^m
+\end{equation}
+de matrice de covariance associée :
+\begin{equation}
+S_{k+1} = H_{k+1} P_{k+1\mid k} H_{k+1}^T + R_{k+1} \in \mathbb{R}^{m \times m}
+\end{equation}
+
+\paragraph{Hypothèse nulle ($\mathcal{H}_0$) :}
+Sous l'hypothèse nominale où le capteur ne subit aucune perturbation anormale, le bruit de mesure $v_{k+1}$ et l'erreur d'état a priori $e_{k+1\mid k}$ sont des processus gaussiens centrés. L'innovation suit alors rigoureusement une loi normale multivariée centrée :
+\begin{equation}
+y_{k+1} \sim \mathcal{N}\left(0, \; S_{k+1}\right)
+\end{equation}
+
+\paragraph{Définition (Distance de Mahalanobis normalisée) :}
+La distance quadratique de Mahalanobis $d_M^2$ est définie par la forme quadratique pondérée par la métrique d'incertitude inverse $S_{k+1}^{-1}$ :
+\begin{equation}
+d_M^2(y_{k+1}) = y_{k+1}^T S_{k+1}^{-1} y_{k+1}
+\end{equation}
+
+\paragraph{Théorème (Distribution de l'innovation blanchie) :}
+Sous l'hypothèse $\mathcal{H}_0$, la variable aléatoire scalaire $d_M^2$ suit exactement une distribution du Chi-deux à $m$ degrés de liberté :
+\begin{equation}
+\boxed{d_M^2 \sim \chi^2(m)}
+\end{equation}
+
+\paragraph{Démonstration :}
+Puisque $S_{k+1}$ est symétrique et strictement définie positive ($S_{k+1} \succ 0$), elle admet une factorisation de Cholesky unique :
+\begin{equation}
+S_{k+1} = L_{k+1} L_{k+1}^T
+\end{equation}
+où $L_{k+1}$ est une matrice triangulaire inférieure inversible à éléments diagonaux strictement positifs. Définissons le vecteur d'innovation \textbf{blanchi} $w_{k+1} \in \mathbb{R}^m$ par :
+\begin{equation}
+w_{k+1} = L_{k+1}^{-1} y_{k+1}
+\end{equation}
+Calculons l'espérance et la covariance de $w_{k+1}$ :
+\begin{align}
+\mathbb{E}[w_{k+1}] &= L_{k+1}^{-1} \mathbb{E}[y_{k+1}] = 0 \\
+\text{Cov}(w_{k+1}) &= \mathbb{E}\left[ w_{k+1} w_{k+1}^T \right] = L_{k+1}^{-1} \, \mathbb{E}\left[ y_{k+1} y_{k+1}^T \right] L_{k+1}^{-T} = L_{k+1}^{-1} S_{k+1} L_{k+1}^{-T} \nonumber \\
+&= L_{k+1}^{-1} \left( L_{k+1} L_{k+1}^T \right) L_{k+1}^{-T} = I_m
+\end{align}
+Étant une transformation linéaire d'un vecteur gaussien, $w_{k+1}$ est un vecteur gaussien standard composé de $m$ variables aléatoires réelles indépendantes et identiquement distribuées selon la loi normale unitaire $\mathcal{N}(0, 1)$ :
+\begin{equation}
+w_{k+1} = \begin{bmatrix} w_1 & w_2 & \dots & w_m \end{bmatrix}^T \quad \text{avec} \quad w_i \sim \mathcal{N}(0, 1) \text{ indépendantes}
+\end{equation}
+Exprimons maintenant la distance de Mahalanobis $d_M^2$ en fonction de $w_{k+1}$ :
+\begin{equation}
+d_M^2 = y_{k+1}^T S_{k+1}^{-1} y_{k+1} = y_{k+1}^T \left( L_{k+1} L_{k+1}^T \right)^{-1} y_{k+1} = \left( L_{k+1}^{-1} y_{k+1} \right)^T \left( L_{k+1}^{-1} y_{k+1} \right) = w_{k+1}^T w_{k+1}
+\end{equation}
+D'où :
+\begin{equation}
+d_M^2 = \sum_{i=1}^m w_i^2
+\end{equation}
+Par définition mathématique, la somme des carrés de $m$ variables aléatoires indépendantes $\mathcal{N}(0, 1)$ suit la loi du $\chi^2$ à $m$ degrés de liberté. On a donc rigoureusement $d_M^2 \sim \chi^2(m)$. $\blacksquare$
+
+---
+
+\subsection{Test d'Hypothèse de Neyman-Pearson et Table des Valeurs Critiques}
+
+Pour rejeter les mesures corrompues tout en minimisant la probabilité de fausse alarme, on formule le test d'hypothèse statistique bilatéral :
+\begin{equation}
+\begin{cases}
+\mathcal{H}_0 : \text{Mesure nominale conforme au modèle physique} \\
+\mathcal{H}_1 : \text{Mesure aberrante (Outlier métrologique)}
+\end{cases}
+\end{equation}
+Pour un niveau de signification $\alpha$ fixé (probabilité de rejeter à tort une mesure valide, typiquement $\alpha = 0.01 \implies 99\%$ de confiance, ou $\alpha = 0.001 \implies 99.9\%$), le seuil de décision critique $\gamma(m, \alpha)$ est calculé par la fonction quantile inverse de la loi du $\chi^2$ :
+\begin{equation}
+\gamma(m, \alpha) = F_{\chi^2(m)}^{-1}(1 - \alpha) \quad \text{tel que} \quad \mathbb{P}\left( d_M^2 \le \gamma \;\middle|\; \mathcal{H}_0 \right) = 1 - \alpha
+\end{equation}
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{p{1.0cm} p{6.2cm} ccc}
+\toprule
+\textbf{Dim. $m$} & \textbf{Mesure instrumentale associée} & \textbf{Seuil $\gamma$ (95\%)} & \textbf{Seuil $\gamma$ (99\%)} & \textbf{Seuil $\gamma$ (99.9\%)} \\
+\midrule
+$m = 1$ & Altimétrie barométrique $Z_{\text{baro}}$ ou distance & $3.84$ & $6.63$ & $10.83$ \\
+$m = 2$ & Coordonnées horizontales GNSS $(X, Y)$ & $5.99$ & $9.21$ & $13.82$ \\
+$m = 3$ & Position 3D UWB ou angles d'Euler $(\phi, \theta, \psi)$ & $7.81$ & $11.34$ & $16.27$ \\
+$m = 4$ & Quaternion unitaire complet $(q_w, q_x, q_y, q_z)$ & $9.49$ & $13.28$ & $18.47$ \\
+$m = 6$ & IMU complète 6-DOF $(\mathbf{a}^b, \boldsymbol{\omega}^b)$ & $12.59$ & $16.81$ & $22.46$ \\
+$m = 13$ & Vecteur global synchrone Situation 2A & $22.36$ & $27.69$ & $34.53$ \\
+\bottomrule
+\end{tabular}
+\caption{Valeurs critiques de la porte de validation $\chi^2$ pour l'arbitrage temps réel en vol.}
+\label{tab:annexe_chi2_seuils}
+\end{table}
+
+\paragraph{Règle de décision algorithmique embarquée :}
+\begin{itemize}
+    \item \textbf{Si $d_M^2 \le \gamma$ :} L'hypothèse $\mathcal{H}_0$ est acceptée. La mesure est validée et injectée dans le calcul du gain de Kalman $K_{k+1}$ et la correction d'état.
+    \item \textbf{Si $d_M^2 > \gamma$ :} L'hypothèse $\mathcal{H}_0$ est rejetée au profit de $\mathcal{H}_1$. La mesure est formellement éliminée. Le filtre saute l'étape de correction pour cette voie capteur :
+    \begin{equation}
+    \hat{x}_{k+1\mid k+1} = \hat{x}_{k+1\mid k}, \qquad P_{k+1\mid k+1} = P_{k+1\mid k}
+    \end{equation}
+    Le système incrémente un compteur d'anomalies consécutives afin d'activer une alerte diagnostic (code LED) si le capteur reste décroché plus de $2$ secondes.
+\end{itemize}
+
+\end{document}
+

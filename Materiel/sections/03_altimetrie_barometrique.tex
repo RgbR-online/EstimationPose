@@ -1,0 +1,90 @@
+\documentclass[../Materiel.tex]{subfiles}
+\begin{document}
+
+\section{Altimétrie Barométrique : DFRobot Fermion BMP581}
+
+\subsection{Composant Nu vs Breakout DFRobot}
+
+Le capteur de pression piézorésistif \textbf{Bosch Sensortec BMP581} représente l'état de l'art en matière de précision altimétrique MEMS :
+\begin{itemize}
+    \item Plage de mesure absolue : $300\,\text{hPa}$ à $1250\,\text{hPa}$ (altitudes opérationnelles de $-500\,\text{m}$ à $+9000\,\text{m}$).
+    \item Résolution de pression : $\mathbf{0.08\,\text{Pa}}$, correspondant à une résolution altimétrique théorique inférieure à \textbf{$1\,\text{cm}$}.
+    \item Bruit RMS typique : $0.08\,\text{Pa}$ en mode filtré haute résolution.
+    \item Coefficient thermique : $\pm 0.5\,\text{Pa/K}$ avec capteur de température interne intégré pour compensation en temps réel.
+\end{itemize}
+
+Le module breakout développé par DFRobot (gamme Fermion) intègre le circuit d'adaptation de niveau et expose les broches sur un connecteur au pas standard de $2.54\,\text{mm}$ :
+
+\begin{figure}[htbp]
+\centering
+\small
+\begin{tabular}{|c|c|c|l|}
+\hline
+\textbf{Broche DFRobot} & \textbf{Type} & \textbf{Tension} & \textbf{Fonction matérielle} \\
+\hline
+\texttt{VCC} & Alimentation & $3.3\,\text{V} - 5.0\,\text{V}$ & Régulateur interne ultra-bas bruit intégré sur le breakout \\
+\texttt{GND} & Masse & $0\,\text{V}$ & Masse commune du système \\
+\texttt{SCL} & Entrée I2C & $3.3\,\text{V} - 5.0\,\text{V}$ & Horloge I2C (supporte jusqu'à $1\,\text{MHz}$ Fast-Mode Plus) \\
+\texttt{SDA} & E/S I2C & $3.3\,\text{V} - 5.0\,\text{V}$ & Ligne de données I2C bidirectionnelle \\
+\texttt{INT} & Sortie logique & $3.3\,\text{V}$ & \textbf{Interruption programmable} (Data Ready ou seuil FIFO) \\
+\texttt{SDO} & Entrée logique & $3.3\,\text{V}$ & Sélection de l'adresse I2C (\texttt{0x47} si SDO=0, \texttt{0x46/0x4A} si SDO=1) \\
+\hline
+\end{tabular}
+\caption{Brochage physique du module DFRobot Fermion BMP581.}
+\end{figure}
+
+\subsection{Fonctionnalités Matérielles Avancées du BMP581}
+
+\subsubsection{Cadencement et modes de fonctionnement}
+Le BMP581 supporte trois modes opératoires principaux :
+\begin{enumerate}
+    \item \textbf{Mode Veille (\textit{Sleep Mode}) :} Consommation minimale ($1.5\,\mu\text{A}$), aucune mesure n'est déclenchée.
+    \item \textbf{Mode Forcé (\textit{Forced Mode}) :} Une seule mesure de pression et de température est effectuée à la demande du processeur, après quoi le capteur retourne en veille.
+    \item \textbf{Mode Normal Continu (\textit{Continuous Normal Mode}) :} Le capteur effectue automatiquement des mesures à une fréquence de rafraîchissement (\textit{ODR - Output Data Rate}) programmable entre $0.125\,\text{Hz}$ et \textbf{$240\,\text{Hz}$}. Pour le dirigeable, une cadence de $30\text{ à }50\,\text{Hz}$ est idéale.
+\end{enumerate}
+
+\subsubsection{Filtre numérique interne IIR (\textit{Infinite Impulse Response})}
+Le BMP581 intègre un coprocesseur de filtrage IIR en amont des registres de sortie :
+\begin{equation}
+    P_{\text{filtré}}[k] = \frac{(C-1) \cdot P_{\text{filtré}}[k-1] + P_{\text{brut}}[k]}{C}
+\end{equation}
+Le coefficient de filtrage $C$ est sélectionnable par logiciel parmi les valeurs :
+$$\{1, \; 3, \; 7, \; 15, \; 31, \; 63, \; 127\}$$
+\begin{itemize}
+    \item Une valeur $C=1$ désactive le filtre (large bande, réactivité maximale mais sensibilité aux vibrations).
+    \item Une valeur $C=15$ ou $C=31$ constitue le réglage optimal pour le dirigeable : elle élimine la quasi-totalité du bruit électronique sans introduire de retard de traînage préjudiciable ($< 30\,\text{ms}$).
+\end{itemize}
+
+\subsubsection{Mémoire tampon matérielle FIFO (32 trames)}
+Le BMP581 intègre une mémoire FIFO de \textbf{32 trames} programmables (pression seule, ou pression + température).
+\begin{itemize}
+    \item \textbf{Intérêt en vol autonome :} Si la Teensy 4.1 est temporairement occupée par une tâche non-interruptible (ex. écriture sur carte SD ou calcul lourd), les mesures barométriques ne sont pas écrasées mais empilées dans la FIFO.
+    \item \textbf{Interruption de seuil d'eau (\textit{FIFO Watermark}) :} La broche \texttt{INT} peut être programmée pour passer à l'état haut dès qu'un nombre prédéterminé de mesures (ex. 8 trames) est disponible.
+\end{itemize}
+
+\subsection{Exploitation sur le PCB Hôte}
+
+\subsubsection{Câblage sans broche d'interruption (Configuration actuelle du PCB)}
+Sur le PCB déjà gravé, la broche \texttt{INT} du BMP581 n'est pas reliée à un GPIO de la Teensy 4.1. 
+\textbf{Cette absence n'entrave aucunement les performances du système :}
+\begin{itemize}
+    \item En configurant le capteur en mode normal continu (\texttt{bmp58x.setMeasureMode(bmp58x.eNormal)}), le BMP581 met à jour ses registres I2C \texttt{0x20} à \texttt{0x25} de façon totalement autonome à la fréquence ODR choisie.
+    \item La Teensy 4.1 lit ces registres par scrutation périodique sans blocage via un simple contrôle de timer logiciel dans \texttt{loop()} :
+\begin{lstlisting}
+if (micros() - lastBaroRead >= 25000) { // 40 Hz
+    lastBaroRead = micros();
+    float pressurePa = bmp58x.readPressPa();
+    float altM = bmp58x.readAltitudeM();
+    kalman_update_baro(altM);
+}
+\end{lstlisting}
+\end{itemize}
+
+\subsubsection{Sensibilité aérodynamique et protection physique sur le dirigeable}
+Le BMP581 étant d'une sensibilité extrême ($0.08\,\text{Pa}$), tout souffle d'hélice ou courant d'air direct sur son orifice métallique crée une surpression ou dépression parasite immédiate (effet Bernoulli).
+\begin{itemize}
+    \item \textbf{Prescription mécanique impérative :} Le capteur doit être enfermé dans une boîte protectrice tapissée de mousse acoustique à cellules ouvertes.
+    \item \textbf{Orientation de la prise de pression :} L'évent de prise d'air statique doit être percé perpendiculairement à l'axe d'avancement du dirigeable et hors du sillage direct des moteurs.
+\end{itemize}
+
+\end{document}

@@ -1,0 +1,295 @@
+\documentclass[../Formulations_Kalman.tex]{subfiles}
+\begin{document}
+
+\section{Introduction}
+
+\subsection{Objectifs et contexte de l'étude}
+L'objectif principal de ce projet est de concevoir et d'implémenter un système d'asservissement robuste en position et en orientation pour un dirigeable autonome dédié au transport précis de marchandises. Le maintien d'une stabilité rigoureuse représente un défi critique, en particulier lors des phases délicates de prise ou de dépôt de charges, où les perturbations aérodynamiques et les variations brusques de masse peuvent déstabiliser le véhicule. 
+
+En automatique, l'efficacité de toute loi d'asservissement est intrinsèquement liée à la qualité et à la précision de l'estimation de son état courant (posture, vitesses linéaires et angulaires). En théorie, l'utilisation conjointe d'une centrale inertielle (IMU) pour l'attitude et d'un système de positionnement absolu — s'appuyant soit sur des balises Ultra-Wideband (UWB) en intérieur, soit sur un récepteur GNSS/GPS en extérieur — permet de reconstruire la cinématique tridimensionnelle du système. 
+
+Toutefois, les mesures brutes issues de ces capteurs sont soumises à d'importants bruits électroniques, à des dérives temporelles et à des masquages potentiels, les rendant inexploitables en l'état pour un contrôle en boucle fermée. Afin de pallier ces limitations physiques et de garantir une estimation optimale et temps réel des grandeurs mesurées, l'implémentation d'un filtre de Kalman Étendu (EKF) s'avère indispensable pour fusionner intelligemment le modèle physique du dirigeable et les données sensorielles.
+
+\subsection{Équations Générales du Filtre de Kalman Étendu (EKF)}
+Le Filtre de Kalman Étendu (EKF) est un outil mathématique utilisé pour fusionner le modèle physique du dirigeable avec les mesures des capteurs, permettant ainsi d'améliorer l'estimation des grandeurs mesurées. Le filtre fonctionne de manière récursive en alternant entre deux phases distinctes : la \textbf{Prédiction} (basée sur la physique) et la \textbf{Correction} (basée sur les capteurs).
+
+La notation $\hat{x}_{a\mid b}$ désigne l'estimation du vecteur d'état à l'instant $a$ sachant toutes les mesures capitalisées jusqu'à l'instant $b$. La matrice $P_{a\mid b}$ représente la matrice de covariance de l'erreur d'estimation associée.
+
+\subsubsection{Phase 1 : Prédiction}
+Cette phase projette l'état actuel et son incertitude à l'instant suivant $k+1$ en utilisant le modèle physique non-linéaire $f(x_k)$.
+
+\begin{enumerate}
+    \item \textbf{Prédiction de l'état (a priori) :}
+    On applique la dynamique physique réelle du système.
+    \begin{equation}
+    \hat{x}_{k+1\mid k} = f(\hat{x}_{k\mid k})
+    \end{equation}
+    
+    \item \textbf{Prédiction de la covariance (a priori) :}
+    On propage le nuage d'incertitude. Comme le modèle $f(x)$ est non-linéaire, on est mathématiquement contraint de le linéariser localement autour de l'état courant à l'aide de sa matrice Jacobienne $F_k$.
+    \begin{equation}
+    P_{k+1\mid k} = F_k P_{k\mid k} F_k^T + Q_k
+    \end{equation}
+    Où :
+    \begin{itemize}
+        \item $F_k = \frac{\partial f}{\partial x}\Big|_{\hat{x}_{k\mid k}}$ est la matrice de transition d'état linéarisée (Jacobienne).
+        \item $Q_k$ est la matrice de covariance du bruit de processus, représentant les imperfections du modèle physique.
+    \end{itemize}
+\end{enumerate}
+
+\subsubsection{Phase 2 : Correction}
+Dès qu'un ensemble de mesures $z_{k+1}$ devient disponible (en provenance de l'UWB, de l'IMU ou du baromètre), le filtre ajuste sa prédiction théorique en effectuant une moyenne pondérée optimale.
+
+\begin{enumerate}
+    \item \textbf{Calcul de l'innovation :}
+    C'est l'écart entre ce que le capteur mesure réellement ($z_{k+1}$) et ce que le modèle prédisait qu'il mesurerait ($H_{k+1} \hat{x}_{k+1\mid k}$).
+    \begin{equation}
+    y_{k+1} = z_{k+1} - H_{k+1} \hat{x}_{k+1\mid k}
+    \end{equation}
+    
+    \item \textbf{Calcul de la covariance de l'innovation $S_{k+1}$ :}
+    Elle combine l'incertitude de la prédiction projetée dans l'espace de mesure et le bruit propre du capteur :
+    \begin{equation}
+    S_{k+1} = H_{k+1} P_{k+1\mid k} H_{k+1}^T + R_{k+1}
+    \end{equation}
+    où $H_{k+1}$ est la matrice d'observation faisant le lien entre l'espace d'état et l'espace de mesure, et $R_{k+1}$ est la matrice de covariance du bruit de mesure.
+    
+    \item \textbf{Validation statistique et rejet des valeurs aberrantes (Porte $\chi^2$) :}
+    Avant de corriger l'état, l'innovation est soumise à un test de cohérence statistique basé sur la distance quadratique de Mahalanobis $d_M^2 = y_{k+1}^T S_{k+1}^{-1} y_{k+1}$. Sous l'hypothèse nominale gaussienne, $d_M^2$ suit rigoureusement une loi du Chi-deux à $m = \dim(z_{k+1})$ degrés de liberté :
+    \begin{equation}
+    d_M^2(y_{k+1}) \sim \chi^2(m)
+    \end{equation}
+    Si $d_M^2 \le \gamma(m, \alpha)$, la mesure est acceptée. Si $d_M^2 > \gamma$, la mesure est rejetée comme aberration métrologique (\textit{outlier} radio, masquage satellitaire ou rafale sur le baromètre), et la mise à jour est sautée ($\hat{x}_{k+1\mid k+1} = \hat{x}_{k+1\mid k}$, $P_{k+1\mid k+1} = P_{k+1\mid k}$). La dérivation formelle par blanchiment de Cholesky et la table complète des seuils critiques $\gamma$ sont détaillées en \textbf{Annexe~\ref{annexe:chi2}}.
+
+    \item \textbf{Calcul du Gain de Kalman $K_{k+1}$ :}
+    C'est le facteur de pondération optimal au sens des moindres carrés, arbitrant entre la confiance dans le modèle cinématique et la confiance dans le capteur :
+    \begin{equation}
+    K_{k+1} = P_{k+1\mid k} H_{k+1}^T S_{k+1}^{-1}
+    \end{equation}
+
+    \item \textbf{Mise à jour de l'état (a posteriori) :}
+    L'état prédit est corrigé par l'innovation pondérée :
+    \begin{equation}
+    \hat{x}_{k+1\mid k+1} = \hat{x}_{k+1\mid k} + K_{k+1} y_{k+1}
+    \end{equation}
+
+    \item \textbf{Mise à jour de la covariance (a posteriori) :}
+    L'expression canonique théorique s'écrit :
+    \begin{equation}
+    P_{k+1\mid k+1} = (I - K_{k+1} H_{k+1}) P_{k+1\mid k}
+    \end{equation}
+    \textbf{Remarque fondamentale pour le calcul embarqué :}
+    Sur microcontrôleur en simple précision flottante (\texttt{float32}), cette formule canonique peut perdre sa symétrie et sa positivité à cause des erreurs d'arrondi. En pratique embarquée, deux verrous mathématiques indispensables sont appliqués :
+    \begin{itemize}
+        \item \textit{Forme stabilisée de Joseph :} On substitue à la formule canonique la formulation $P = (I-KH)P(I-KH)^T + KRK^T$, qui garantit mathématiquement $P \succeq 0$ de manière inconditionnelle pour tout gain $K$ (démonstration formelle en \textbf{Annexe~\ref{annexe:joseph}}).
+        \item \textit{Symétrisation optimale de Frobenius :} L'opération périodique $P \leftarrow \frac{P + P^T}{2}$ constitue l'unique projection orthogonale au sens des moindres carrés sur le sous-espace des matrices symétriques $\mathcal{S}_n(\mathbb{R})$ (démonstration formelle en \textbf{Annexe~\ref{annexe:frobenius}}).
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Architecture matérielle et capteurs utilisés}
+Afin de fournir les données nécessaires à l'algorithme de fusion (position, vitesse, attitude, pressions), le dirigeable embarque une suite de capteurs complémentaires. Le paramétrage rigoureux d'un filtre de Kalman (matrices de bruit de processus $Q$ et de bruit de mesure $R$, ainsi que la modélisation des états d'erreur et de biais) exige de connaître précisément les caractéristiques métrologiques de chaque instrument : bruit blanc (densité spectrale, écart-type nominal $\sigma$, bruit RMS), précision statique et dynamique, biais d'offset et dérives thermiques/temporelles, ainsi que les cadences maximales de rafraîchissement ($f_{\max}$).
+
+\paragraph{Articulation documentaire avec le document matériel :}
+La description physique détaillée des modules, des broches, des registres I2C/SPI, des tampons FIFO matériels, des schémas de câblage et des fiches techniques constructeurs est centralisée dans le document compagnon \textbf{\texttt{Materiel.pdf}} (\textit{Spécifications et Caractérisation Matérielle des Capteurs}). La présente section se focalise sur les grandeurs mathématiques, les densités spectrales de bruit et les incertitudes stochastiques nécessaires à l'instanciation des matrices $Q_k$ et $R_{k+1}$.
+
+\subsubsection{Calculateur de bord embarqué : PJRC Teensy 4.1}
+Le cœur de calcul embarqué à bord de la nacelle du dirigeable repose sur une carte microcontrôleur \textbf{PJRC Teensy 4.1}. Ce choix est motivé par la nécessité d'exécuter à haute fréquence des opérations d'algèbre matricielle et quaternionique (inversions, produits de covariance, propagation cinématique non-linéaire) avec un déterminisme temporel strict pour la boucle d'asservissement du dirigeable. Ses caractéristiques matérielles incluent :
+\begin{itemize}
+    \item \textbf{Cœur processeur NXP i.MX RT1062 (ARM Cortex-M7) cadencé à $600\text{ MHz}$ :} Délivrant une puissance de calcul d'environ $1200\text{ MIPS}$, il garantit un temps d'exécution d'un cycle complet de filtrage de l'ordre de $30\text{ à }50\,\mu\text{s}$, bien inférieur à la période d'échantillonnage des capteurs les plus rapides ($2.5\text{ à }10\text{ ms}$).
+    \item \textbf{Unité de calcul en virgule flottante matérielle (FPU 32 et 64 bits IEEE 754) :} Accélère nativement les produits matriciels de covariance ($P_{k+1\mid k} = F_k P_{k\mid k} F_k^T + Q_k$) sans émulation logicielle.
+    \item \textbf{Hiérarchie mémoire déterministe :} $1024\text{ Ko}$ de RAM totale, dont $512\text{ Ko}$ de mémoire étroitement couplée (\textit{Tightly Coupled Memory} - TCM) accessible en un cycle d'horloge sans pénalité de cache bus, et $8\text{ Mo}$ de Flash pour le stockage statique des tables de gain et des configurations.
+    \item \textbf{Interfaces périphériques distribuées :} 3 bus I2C indépendants (Wire, Wire1, Wire2 supportant le mode Fast-Mode Plus à $1\text{ MHz}$), 8 liaisons série UART matérielles et 3 bus SPI. Cette architecture élimine toute contention de bus : l'IMU et le baromètre sont isolés sur des contrôleurs I2C distincts, tandis que le récepteur UWB ou GPS dispose d'une liaison UART exclusive.
+\end{itemize}
+
+\subsubsection{Centrale inertielle (IMU) et fusion d'attitude}
+L'attitude du dirigeable ($\phi, \theta, \psi$ ou quaternion $q$) ainsi que la cinématique inertielle locale ($\boldsymbol{\omega} = [p, q, r]^T$ et $\mathbf{a}^b = [a_x^b, a_y^b, a_z^b]^T$) peuvent être mesurées par deux centrales 9-DOF alternatives :
+
+\paragraph{1. CMPS12 (Robot Electronics) :}
+\begin{itemize}
+    \item \textbf{Documents de référence :} Fiche descriptive du module \texttt{Programmation/Datasheets/IMU/cmps12\_doc.pdf} (Robot Electronics, 8 pages) et datasheet constructeur du composant interne Bosch Sensortec BNO055 : \texttt{Programmation/Datasheets/IMU/BNO055\_datasheet.pdf} (Rev 1.2, 105 pages).
+    \item \textbf{Architecture et sorties délivrées :} Le CMPS12 intègre le capteur Bosch BNO055 (accéléromètre triaxial, gyromètre triaxial, magnétomètre triaxial) couplé à un microcontrôleur qui pré-calcule le cap magnétique (Boussole 16 bits de $0$ à $359.9^\circ$, résolution $0.1^\circ$, registres \texttt{0x02-0x03}), l'angle de tangage ($\pm 180^\circ$, résolution $0.1^\circ$, registres \texttt{0x1C-0x1D}) et le roulis ($\pm 90^\circ$, résolution $0.1^\circ$, registres \texttt{0x1E-0x1F}), ainsi que les données inertielles brutes 16 bits (registres \texttt{0x06} à \texttt{0x17}) [\textit{cmps12\_doc.pdf}, pages 2--3].
+    \item \textbf{Précision de cap (BNO055) :} $\pm 2.5^\circ$ typique sous champ géomagnétique horizontal de $30\,\mu\text{T}$, capteur pleinement étalonné et compensation d'assiette idéale [\textit{BNO055\_datasheet.pdf}, Section 1.2, Tableau 1-2, page 15].
+    \item \textbf{Bruit du gyromètre (BNO055) :} Densité spectrale de bruit de $0.014^\circ/\text{s}/\sqrt{\text{Hz}}$ ; bruit RMS mesuré à $0.1^\circ/\text{s}$ typique ($0.3^\circ/\text{s}$ max) pour une bande passante de $47\text{ Hz}$ [\textit{BNO055\_datasheet.pdf}, page 14].
+    \item \textbf{Biais gyrométrique (Zero-rate offset) :} $\pm 1^\circ/\text{s}$ typique ($\pm 3^\circ/\text{s}$ max) à $25^\circ\text{C}$ ; dérive thermique de $\pm 0.015^\circ/\text{s}/\text{K}$ [\textit{BNO055\_datasheet.pdf}, page 14].
+    \item \textbf{Bruit de l'accéléromètre (BNO055) :} Densité spectrale de bruit de $150\,\mu g/\sqrt{\text{Hz}}$ typique ($190\,\mu g/\sqrt{\text{Hz}}$ max) en mode normal [\textit{BNO055\_datasheet.pdf}, page 14]. À la bande passante par défaut de $62.5\text{ Hz}$ (Tableau 3-4, page 21), l'écart-type de bruit RMS vaut $\sigma_{\text{acc}} \approx 150\cdot 10^{-6} \times 9.81 \times \sqrt{62.5} \approx 0.0116\text{ m/s}^2$ ($\sigma_{\text{acc}}^2 \approx 1.35\cdot 10^{-4}\text{ m}^2/\text{s}^4$).
+    \item \textbf{Biais accélérométrique (Zero-g offset) :} $\pm 80\text{ mg} \approx \pm 0.78\text{ m/s}^2$ typique sur la durée de vie [\textit{BNO055\_datasheet.pdf}, page 13].
+    \item \textbf{Bruit du magnétomètre (BNO055) :} $0.3\,\mu\text{T}$ RMS en préréglage haute précision, $0.6\,\mu\text{T}$ RMS en préréglage standard [\textit{BNO055\_datasheet.pdf}, page 16].
+    \item \textbf{Cadence d'acquisition :} $100\text{ Hz}$ pour les données d'attitude filtrées par le BNO055.
+    \item \textbf{Informations NON fournies dans la documentation du CMPS12 (Priorité expérimentale) :}
+    \begin{itemize}
+        \item Le document propre du CMPS12 (\textit{cmps12\_doc.pdf}) \textbf{ne fournit aucune variance, écart-type de bruit ou précision dynamique}.
+        \item Le microcontrôleur PIC embarqué sur la platine CMPS12 effectue ses propres opérations de lissage et de recalibration automatique en continu (registre \texttt{0x1E}, page 3), ce qui altère le temps de réponse et la variance effective par rapport au BNO055 brut.
+        \item \textbf{Action expérimentale requise :} Enregistrer des séries temporelles statiques au repos sur banc pour identifier directement les variances de mesure réelles $\sigma_{\phi,\text{cmps}}^2, \sigma_{\theta,\text{cmps}}^2, \sigma_{\psi,\text{cmps}}^2$ et valider les variances des données inertielles brutes.
+    \end{itemize}
+\end{itemize}
+
+\paragraph{2. Adafruit 9-DOF IMU Breakout — BNO085 (CEVA / Hillcrest Labs / Bosch Sensortec) :}
+\begin{itemize}
+    \item \textbf{Documents de référence :} Fiche produit Adafruit \texttt{https://www.adafruit.com/product/4754} (archivée dans \texttt{Programmation/Datasheets/IMU/Adafruit IMU BNO085.url}) et Datasheet officielle CEVA / Hillcrest Labs : \textit{BNO080/BNO085 Data Sheet} (Doc 1000-3934, Section 3 \textit{Performance Characteristics}).
+    \item \textbf{Architecture et coprocesseur SH-2 :} Le BNO085 encapsule des MEMS triaxiaux (accéléromètre, gyroscope, magnétomètre) et un microcontrôleur ARM Cortex-M0+ 32 bits exécutant le micrologiciel de fusion dynamique \textbf{SH-2} de CEVA / Hillcrest Laboratories.
+    \item \textbf{Précision d'attitude en vecteur de rotation complet (Rotation Vector 9-DOF : Accel + Gyro + Mag) :}
+    \begin{itemize}
+        \item \textbf{Erreur statique de rotation :} $2.0^\circ$ nominal [\textit{BNO080/BNO085 Datasheet}, Section 3, Table 3-1].
+        \item \textbf{Erreur dynamique de rotation :} $3.5^\circ$ nominal (observée typiquement à $\approx 3.5^\circ \text{ à } 5.0^\circ$ en environnement opérationnel réel).
+    \end{itemize}
+    \item \textbf{Précision d'attitude en vecteur de jeu (Gaming Rotation Vector 6-DOF : Accel + Gyro sans magnétomètre) :}
+    \begin{itemize}
+        \item \textbf{Erreur statique hors lacet :} $1.5^\circ$.
+        \item \textbf{Erreur dynamique hors lacet :} $2.5^\circ$.
+        \item \textbf{Dérive en lacet (Heading drift) :} $0.5^\circ/\text{minute}$ (dérive due à l'intégration pure sans rappel magnétique).
+    \end{itemize}
+    \item \textbf{Précision en vecteur géomagnétique (Geomagnetic Rotation Vector 6-DOF : Accel + Mag) :}
+    \begin{itemize}
+        \item Erreur statique : $3.0^\circ$, Erreur dynamique : $4.5^\circ$.
+    \end{itemize}
+    \item \textbf{Précision des sorties cinématiques et dérivés de fusion :}
+    \begin{itemize}
+        \item \textbf{Accélération linéaire (Linear Acceleration, exempte de pesanteur) :} précision de $0.35\text{ m/s}^2$ [\textit{BNO080/BNO085 Datasheet}, Table 3-1].
+        \item \textbf{Accéléromètre étalonné :} précision absolue de $0.3\text{ m/s}^2$.
+        \item \textbf{Vitesse angulaire étalonnée (Gyroscope) :} précision de $3.1^\circ/\text{s}$.
+        \item \textbf{Angle de gravité estimé :} précision de $1.5^\circ$.
+        \item \textbf{Magnétomètre étalonné :} précision de $1.4\,\mu\text{T}$.
+    \end{itemize}
+    \item \textbf{Cadence d'acquisition :} Jusqu'à $400\text{ Hz}$ pour le Rotation Vector et l'accélération linéaire via liaison I2C rapide ou SPI (contre $100\text{ Hz}$ max pour le BNO055/CMPS12).
+    \item \textbf{Indicateur de confiance temps réel :} Chaque trame SH-2 de Rotation Vector transmet un champ d'estimation d'incertitude angulaire en radians (\textit{Estimated Accuracy}), permettant d'actualiser dynamiquement la matrice $R_{k+1}$ au fil du vol.
+    \item \textbf{Informations NON fournies dans la documentation constructeur (Priorité expérimentale) :}
+    \begin{itemize}
+        \item La variance exacte du bruit blanc gaussien instantané ($\sigma_{\text{white}}^2$) sur les composantes de quaternion à l'arrêt n'est pas chiffrée (seule l'enveloppe d'erreur crête de $2.0^\circ$ statique et $3.5^\circ$ dynamique est normalisée).
+        \item \textbf{Action expérimentale requise :} Enregistrer des acquisitions stationnaires à $100\text{ Hz}$ et $400\text{ Hz}$ pour mesurer la variance de bruit instantané et configurer la diagonale de $R_{k+1}$.
+    \end{itemize}
+\end{itemize}
+
+\paragraph{3. Analyse comparative approfondie : CMPS12 vs Adafruit BNO085 :}
+Une analyse naïve des seules valeurs numériques statiques pourrait laisser penser que les deux capteurs sont de précision équivalente, puisque le BNO055 du CMPS12 revendique $\pm 2.5^\circ$ de cap en champ statique idéal, tandis que le BNO085 affiche $2.0^\circ$ en statique et $3.5^\circ$ en dynamique. Pourtant, en robotique aérienne et en navigation embarquée, l'\textbf{Adafruit BNO085 s'avère nettement supérieur au CMPS12} pour plusieurs raisons fondamentales :
+\begin{enumerate}
+    \item \textbf{Robustesse aux perturbations magnétiques dynamiques :} Les algorithmes de fusion intégrés dans le microcode SH-2 (CEVA Hillcrest) intègrent une détection et un rejet actif des anomalies fer doux/fer dur transitoires. À l'inverse, l'algorithme interne du BNO055 (CMPS12) décroche fréquemment en vol à proximité des courants d'alimentation des moteurs brushless ou de pièces ferreuses, provoquant des sauts d'attitude brutaux et une perte totale du niveau d'étalonnage (\texttt{CALIB\_STAT}).
+    \item \textbf{Extraction native de l'accélération linéaire à $400\text{ Hz}$ :} Le BNO085 effectue la soustraction du vecteur pesanteur directement sur son coprocesseur embarqué avec une précision de $0.35\text{ m/s}^2$. Pour le filtre de Kalman (Situations 2 et 3), cette mesure d'accélération linéaire propre peut être exploitée directement sans imposer à la Teensy de recalculer la projection gravitationnelle non-linéaire $R(q) [0, 0, g]^T$.
+    \item \textbf{Fourniture native de quaternions et de l'incertitude estimée :} Le BNO085 évite toute singularité trigonométrique en fournissant directement des quaternions unitaires et transmet une estimation dynamique de sa propre incertitude angulaire, permettant au filtre d'adapter sa confiance instantanée.
+\end{enumerate}
+
+\subsubsection{Mesure absolue de la position globale (UWB ou GNSS/GPS)}
+La position tridimensionnelle globale est acquise via deux technologies complémentaires :
+
+\paragraph{1. Système de positionnement local — Decawave DWM1001-DEV / DWM1001C (UWB) :}
+\begin{itemize}
+    \item \textbf{Documents de référence :} Datasheet du module \texttt{Programmation/Datasheets/UWB/DWM1001C Data Sheet.pdf} (Decawave Ltd, Version 1.7, 31 pages), \texttt{Programmation/Datasheets/UWB/DWM1001-DEV Data Sheet.pdf} (16 pages) et guide d'API firmware \texttt{Programmation/Datasheets/UWB/DWM1001 Firmware API Guide.pdf} (Decawave Ltd, 123 pages).
+    \item \textbf{Précision de mesure de distance (Ranging accuracy) :} $\pm 10\text{ cm}$ nominale [\textit{DWM1001C Data Sheet}, page 1].
+    \item \textbf{Précision de positionnement 3D :} Typiquement $\approx 10\text{ cm}$ en environnement de vue directe (LOS - \textit{Line of Sight}) [\textit{DWM1001 Firmware API Guide}, Section 2.2, page 14 : \textit{“the DW1000 used in this design provides approximately 10 cm accuracy”}].
+    \item \textbf{Écart-type nominal horizontal pour le Kalman :} $\sigma_{\text{nom},xy} = 0.10\text{ m} \implies \sigma_{\text{nom},xy}^2 = 0.01\text{ m}^2$.
+    \item \textbf{Facteur de qualité de position (Position Quality Factor - PQF) :} Entier codé sur 1 octet variant de $1\text{ à }100\%$ délivré avec chaque coordonnée $X, Y, Z$ [\textit{DWM1001 Firmware API Guide}, pages 33, 42, 55, 114]. Ce facteur est exploité pour moduler la variance en temps réel : $\sigma_{X,\text{pos}}^2 = \sigma_{Y,\text{pos}}^2 = \frac{\sigma_{\text{nom},xy}^2}{C_k}$ avec $C_k = \frac{\text{pqf}}{100} \in ]0, 1]$.
+    \item \textbf{Cadence d'échantillonnage :} Configurable par la fonction d'API \texttt{dwm\_upd\_rate\_set} par pas de $100\text{ ms}$, soit une fréquence maximale de publication de $10\text{ Hz}$ en mode actif [\textit{DWM1001 Firmware API Guide}, Section 5.3.3, page 44].
+    \item \textbf{Capteurs additionnels sur le module :} Le DWM1001 intègre un accéléromètre triaxial STMicroelectronics LIS2DH12TR exploité par le microcode PANS pour détecter l'état stationnaire ou en mouvement [\textit{DWM1001C Data Sheet}, Section 1.4, page 5].
+    \item \textbf{Informations NON fournies dans la documentation (Priorité expérimentale) :}
+    \begin{itemize}
+        \item \textbf{Coefficient d'anisotropie verticale $k_z$ :} La documentation ne spécifie aucun facteur analytique de dégradation de la variance verticale lorsque les ancres UWB sont disposées dans un plan horizontal quasi-coplanaire.
+        \item \textbf{Action expérimentale requise :} Réaliser des paliers d'altitude connus dans le volume de vol pour identifier la dégradation géométrique réelle et calibrer le facteur $k_z \in [2, 5]$ tel que $\sigma_{Z,\text{pos}}^2 = \frac{(k_z \sigma_{\text{nom},xy})^2}{C_k}$.
+    \end{itemize}
+\end{itemize}
+
+\paragraph{2. Récepteur GNSS — Adafruit Mini GPS PA1010D (MediaTek MT3333) :}
+\begin{itemize}
+    \item \textbf{Documents de référence :} Fiche produit Adafruit \texttt{https://www.adafruit.com/product/4415} (archivée dans \texttt{Programmation/Datasheets/GPS/Adafruit GPS PA1010D.url}) et Datasheet constructeur CDTop Technology : \textit{CD-PA1010D GPS Module Data Sheet} (Chipset MediaTek MT3333).
+    \item \textbf{Précision de positionnement horizontal :}
+    \begin{itemize}
+        \item \textbf{Mode autonome (sans assistance) :} $3.0\text{ m}$ CEP ($50\%$), équivalant à un écart-type $1\sigma \approx 2.54\text{ m}$ et une précision 2D-RMS ($95\%$) d'environ $4.2\text{ m}$.
+        \item \textbf{Mode différentiel DGPS / SBAS (WAAS, EGNOS, MSAS, GAGAN) :} $2.5\text{ m}$ CEP ($50\%$), équivalant à un écart-type $1\sigma \approx 2.12\text{ m}$.
+    \end{itemize}
+    \item \textbf{Précision de vitesse (Velocity accuracy) :}
+    \begin{itemize}
+        \item Mode autonome : $0.1\text{ m/s}$ (soit une variance de vitesse $\sigma_{V}^2 = 0.01\text{ m}^2/\text{s}^2$).
+        \item Mode SBAS : $0.05\text{ m/s}$ ($\sigma_{V}^2 = 0.0025\text{ m}^2/\text{s}^2$).
+    \end{itemize}
+    \item \textbf{Cadence d'acquisition :} $1\text{ Hz}$ par défaut, paramétrable jusqu'à $10\text{ Hz}$ ($5\text{ Hz}$ recommandé pour maintenir l'algorithme SBAS actif).
+    \item \textbf{Temps de premier point (TTFF) :} Démarrage à froid (\textit{Cold Start}) $< 35\text{ s}$ ; démarrage à chaud (\textit{Hot Start}) $< 1\text{ s}$ ; sensibilité de poursuite de $-165\text{ dBm}$.
+    \item \textbf{Pondération dynamique dans le Kalman :} Les trames NMEA fournissent les facteurs d'affaiblissement géométrique HDOP et VDOP : $\sigma_{X,\text{pos}}^2 = \sigma_{Y,\text{pos}}^2 = (\text{HDOP} \cdot \sigma_{0,\text{gps}})^2$ avec $\sigma_{0,\text{gps}} = 2.5\text{ m}$.
+    \item \textbf{Informations NON fournies dans la documentation (Priorité expérimentale) :}
+    \begin{itemize}
+        \item La dispersion altimétrique absolue $1\sigma$ verticale n'est pas chiffrée (seule la précision circulaire 2D horizontale est contractuelle).
+        \item \textbf{Action expérimentale requise :} Enregistrer une session statique extérieure de 30 minutes sous ciel ouvert pour déterminer la variance verticale de base $\sigma_{Z,\text{gps}}^2$ et valider le facteur d'échelle du VDOP.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Capteurs de pression altimétrique (Baromètres numériques)}
+L'altitude barométrique $Z_{\text{baro}}$ consolide la composante verticale critique du filtre :
+
+\paragraph{1. DFRobot Fermion BMP581 (Bosch Sensortec) :}
+\begin{itemize}
+    \item \textbf{Documents de référence :} Fiche produit DFRobot \texttt{https://www.dfrobot.com/product-3072.html} (archivée dans \texttt{Programmation/Datasheets/Baromètre\_Altimètre/DFRobot Fermion BMP581.url}) et Datasheet officielle Bosch Sensortec : \textit{BMP581 Digital Pressure Sensor Data Sheet} (Document BST-BMP581-DS004).
+    \item \textbf{Bruit de lecture de pression (RMS Noise) :} Typiquement \textbf{$< 0.08\text{ Pa RMS}$} en mode ultra-bas bruit (sur-échantillonnage 16x et filtrage IIR activé), et $< 0.1\text{ Pa RMS}$ en mode normal.
+    \item \textbf{Équivalent altimétrique de bruit :} Au niveau de la mer ($\approx 8.3\text{ cm/Pa}$), $0.08\text{ Pa}$ correspond à un bruit altimétrique RMS sub-centimétrique exceptionnel :
+    \begin{equation}
+    \sigma_{\text{alt, rms}} \approx 0.08\text{ Pa} \times 0.083\text{ m/Pa} \approx 6.6\text{ mm} \implies \sigma_{\text{baro}}^2 \approx 4.4 \cdot 10^{-5}\text{ m}^2
+    \end{equation}
+    \item \textbf{Précision relative de pression (Relative accuracy) :} Typiquement $\pm 6\text{ Pa}$ ($\pm 0.06\text{ hPa}$), soit environ $\pm 0.5\text{ m}$ d'erreur relative entre $700$ et $1100\text{ hPa}$ de $15^\circ\text{C}$ à $55^\circ\text{C}$.
+    \item \textbf{Précision absolue de pression (Absolute accuracy) :} Typiquement $\pm 30\text{ Pa}$ ($\pm 0.3\text{ hPa}$), soit $\approx \pm 2.5\text{ m}$ (erreur maximale bornée à $\pm 50\text{ Pa} = \pm 0.5\text{ hPa}$).
+    \item \textbf{Dérive et stabilité temporelle (Paramétrage du biais $b_{\text{baro}}$) :}
+    \begin{itemize}
+        \item Dérive à long terme (12 mois) : $\pm 10\text{ Pa}$ ($\pm 0.1\text{ hPa}$, soit $\approx 0.8\text{ m/an}$).
+        \item Coefficient thermique d'offset (TCO) : $\pm 0.5\text{ Pa/K}$ (soit une sensibilité thermique d'environ $4.1\text{ cm/K}$).
+        \item Dérive de soudage (Solder drift) : $\pm 30\text{ Pa}$ ($\pm 0.3\text{ hPa}$).
+    \end{itemize}
+    \item \textbf{Résolution physique et cadence :} Sortie numérique 24 bits, résolution de registre de $1/64\text{ Pa} \approx 0.016\text{ Pa}$ ($0.13\text{ mm}$ d'air) ; fréquence d'échantillonnage jusqu'à $240\text{ Hz}$ en mode normal et $622\text{ Hz}$ en mode continu.
+    \item \textbf{Informations NON fournies dans la documentation (Priorité expérimentale) :}
+    \begin{itemize}
+        \item La documentation caractérise le capteur en atmosphère calme. Elle ne quantifie pas la surpression dynamique aérodynamique (effet Venturi et souffle hélicoïdal des propulseurs) induite par les moteurs du dirigeable.
+        \item \textbf{Action expérimentale requise :} Mesurer au sol la variation de pression statique lors de montées en régime moteur progressives afin d'évaluer le saut de biais aérodynamique $\Delta b_{\text{aero}}$ à compenser.
+    \end{itemize}
+\end{itemize}
+
+\paragraph{2. NXP MPL3115A2 :}
+\begin{itemize}
+    \item \textbf{Documents de référence :} Datasheet officielle NXP : \texttt{Programmation/Datasheets/Baromètre\_Altimètre/MPL3115A2\_datasheet.pdf} (Rev 8.1, 17 Mai 2024, 51 pages) et Note d'application \texttt{Programmation/Datasheets/Baromètre\_Altimètre/AN4519.pdf} (Freescale / NXP).
+    \item \textbf{Bruit de lecture de pression (Pressure reading noise) :}
+    \begin{itemize}
+        \item Sur-échantillonnage 1x : $19\text{ Pa RMS}$ [\textit{MPL3115A2\_datasheet.pdf}, Tableau 5, page 7], soit environ $\sigma_z \approx 1.58\text{ m RMS}$.
+        \item Sur-échantillonnage 128x : $1.5\text{ Pa RMS}$ [Tableau 5, page 7], soit environ $\sigma_z \approx 0.125\text{ m RMS}$ ($12.5\text{ cm}$).
+    \end{itemize}
+    \item \textbf{Précision relative de pression :} $\pm 0.05\text{ kPa} = \pm 50\text{ Pa}$ ($\approx \pm 4.2\text{ m}$) à température constante entre $70$ et $110\text{ kPa}$ ; $\pm 0.1\text{ kPa} = \pm 100\text{ Pa}$ ($\approx \pm 8.3\text{ m}$) en température variable [Tableau 5, page 8].
+    \item \textbf{Précision absolue de pression :} $\pm 0.4\text{ kPa} = \pm 400\text{ Pa}$ de $0^\circ\text{C}$ à $50^\circ\text{C}$ [Tableau 5, page 7], soit environ $\pm 33\text{ m}$ d'incertitude absolue.
+    \item \textbf{Résolution de sortie :} Mode baromètre $0.25\text{ Pa}$ ; mode altimètre direct $0.0625\text{ m} = 1/16\text{ m}$ [Tableau 5, page 8].
+    \item \textbf{Dérive temporelle :} $\pm 0.1\text{ kPa/an} = \pm 100\text{ Pa/an}$ ($\approx 8.3\text{ m/an}$) ; dérive après reflow $\pm 0.15\text{ kPa} = \pm 150\text{ Pa}$ [Tableau 5, page 8].
+    \item \textbf{Cadence d'acquisition :} Jusqu'à $100\text{ Hz}$ en sur-échantillonnage 1x ; mais en mode haute résolution 128x, le temps de conversion est de $512\text{ ms}$, plafonnant la fréquence réelle à $\approx 1.95\text{ Hz}$ [Tableau 5, page 8 et Section 14].
+\end{itemize}
+
+\subsubsection{Tableau de synthèse métrologique pour le filtre de Kalman}
+Le tableau récapitulatif ci-après rassemble l'ensemble des valeurs numériques extraites des documentations constructeurs, leur localisation précise, et leur affectation dans les matrices stochastiques du filtre ($R_{k+1}$ et $Q_k$).
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{p{2.6cm} p{2.2cm} p{3.2cm} p{2.5cm} p{1.1cm} p{4.0cm}}
+\toprule
+\textbf{Capteur \& Modèle} & \textbf{Grandeur / Repère} & \textbf{Précision / Bruit ($1\sigma$ ou RMS)} & \textbf{Biais / Dérive} & \textbf{Cadence} & \textbf{Source \& Statut métrologique} \\
+\midrule
+\textbf{CMPS12} \newline (Robot Electronics) & $\psi$ (cap), $\phi, \theta$ \newline Repère local $\mathcal{R}_{\text{earth}}$ & Boussole : $\pm 2.5^\circ$ typ. (BNO055) \newline $\sigma_{\psi}^2 \approx (2.5^\circ \frac{\pi}{180})^2 \approx 1.9\cdot 10^{-3}\text{ rad}^2$ & Dérive gyro : $\pm 1^\circ/\text{s}$ \newline TCO : $\pm 0.015^\circ/\text{s}/\text{K}$ & $100\text{ Hz}$ & Doc: \textit{cmps12\_doc.pdf} (p. 2-3) \& \textit{BNO055} (p. 14-15). \newline \textbf{Non spécifié CMPS : À mesurer}. \\
+\midrule
+\textbf{Adafruit BNO085} \newline (CEVA / Bosch) & Quat. $q$, $\mathbf{a}_{\text{lin}}^b$, $\boldsymbol{\omega}^b$ \newline Repères $\mathcal{R}_{\text{earth}}, \mathcal{R}_b$ & Rot. Vector : $2.0^\circ$ (stat), $3.5^\circ$ (dyn) \newline $\mathbf{a}_{\text{lin}}$ : $0.35\text{ m/s}^2$ ; Gyro : $3.1^\circ/\text{s}$ \newline Incertitude angulaire en direct & Dérive Gaming : $0.5^\circ/\text{min}$ \newline Rejet d'anomalies mag. & $400\text{ Hz}$ & Web: \texttt{adafruit.com/product/4754} \& CEVA DS (Table 3-1). \newline \textbf{Bruit blanc stationnaire à mesurer}. \\
+\midrule
+\textbf{Decawave DWM1001-DEV} \newline (UWB) & Position $[X,Y,Z]^T$ \newline Repère ancres $\mathcal{R}_{\text{uwb}}$ & Ranging : $\pm 10\text{ cm}$ \newline $\sigma_{xy}^2 = (0.10\text{ m})^2 / C_k$ \newline Facteur qualité $C_k \in ]0, 1]$ & Erreur d'horloge $< 3\text{ ppm}$ \newline Pas de dérive de position & $10\text{ Hz}$ & Doc: \textit{DWM1001C DS} (p. 1, 6) \& \textit{Firmware API Guide} (p. 14, 44). \newline \textbf{Anisotropie $k_z$ à étalonner}. \\
+\midrule
+\textbf{Adafruit PA1010D} \newline (GNSS / GPS) & Pos. $(\varphi, \lambda, h)$, Vit. $\mathbf{V}$ \newline Ellipsoïde WGS84 & Horiz. : $2.5\text{ m}$ (SBAS) / $3.0\text{ m}$ (autonome) \newline Vitesse : $0.05\text{ à }0.1\text{ m/s}$ & Biais dépendant de l'ionosphère et DOP & $10\text{ Hz}$ \newline ($5\text{ Hz}$ SBAS) & Web: \texttt{adafruit.com/product/4415} \& CD-PA1010D DS (p. 4). \newline \textbf{Précision verticale à mesurer}. \\
+\midrule
+\textbf{DFRobot BMP581} \newline (Bosch Sensortec) & Pression $P$, Alt. $Z$ \newline Axe vertical global & Bruit RMS : $< 0.08\text{ Pa}$ ($\approx 0.7\text{ cm}$) \newline Relatif : $\pm 6\text{ Pa}$ ($\pm 0.5\text{ m}$) \newline Absolu : $\pm 30\text{ Pa}$ ($\pm 2.5\text{ m}$) & Dérive : $\pm 10\text{ Pa/an}$ \newline TCO : $\pm 0.5\text{ Pa/K}$ \newline Biais $b_{\text{baro}}$ estimé & $240\text{ Hz}$ \newline ($622\text{ Hz}$ cont.) & Web: \texttt{dfrobot.com/product-3072} \& Bosch BMP581 DS (p. 8-10). \newline \textbf{Perturbation hélices à mesurer}. \\
+\midrule
+\textbf{NXP MPL3115A2} \newline (Baromètre piézo) & Pression $P$, Alt. $Z$ \newline Axe vertical global & Bruit RMS : $1.5\text{ Pa}$ (128x OSR, $\approx 12\text{ cm}$) \newline Relatif : $\pm 50\text{ Pa}$ ($\pm 4.2\text{ m}$) \newline Absolu : $\pm 400\text{ Pa}$ ($\pm 33\text{ m}$) & Dérive : $\pm 100\text{ Pa/an}$ \newline Soudage : $\pm 150\text{ Pa}$ & $1.95\text{ Hz}$ \newline (128x OSR) & Doc: \textit{MPL3115A2\_datasheet.pdf} (p. 7-8, Table 5). \newline \textbf{Perturbation hélices à mesurer}. \\
+\bottomrule
+\end{tabular}
+\caption{Synthèse métrologique complète des capteurs pour le dimensionnement du filtre de Kalman.}
+\label{tab:synthese_metrologique_capteurs}
+\end{table}
+
+\subsubsection{Programme prioritaire de détermination expérimentale au sol}
+Pour combler les lacunes des documentations constructeurs identifiées ci-dessus, le protocole expérimental prioritaire suivant doit être conduit avant les vols libres :
+\begin{enumerate}
+    \item \textbf{Identification des variances de bruit blanc au repos (Matrice $R_{k+1}$) :}
+    Poser la nacelle équipée de tous ses capteurs sur une surface rigide antivibratoire pendant 10 minutes à température stabilisée. Enregistrer à cadence maximale les trames de l'IMU (CMPS12 et BNO085), du baromètre (BMP581) et de l'UWB (DWM1001). Calculer pour chaque canal l'écart-type expérimental $\hat{\sigma} = \sqrt{\frac{1}{N-1}\sum (y_i - \bar{y})^2}$ afin d'injecter des valeurs réelles dans les diagonales de $R_{k+1}$.
+    \item \textbf{Étalonnage de l'anisotropie verticale UWB ($k_z$) :}
+    Déplacer verticalement la nacelle par pas de $20\text{ cm}$ entre $0.5\text{ m}$ et $2.5\text{ m}$ de hauteur dans le volume délimité par les 4 ancres UWB. Calculer la régression linéaire entre la dispersion verticale $\sigma_Z$ et la dispersion horizontale $\sigma_{XY}$ pour déterminer le facteur multiplicateur $k_z$ applicable au réseau réel.
+    \item \textbf{Caractérisation de la perturbation aérodynamique des propulseurs sur le baromètre :}
+    Fixer le dirigeable au banc dynamométrique au sol. Réaliser des montées en régime moteur par paliers de gaz ($0\%$, $25\%$, $50\%$, $75\%$, $100\%$). Mesurer l'écart de pression statique $\Delta P(RPM)$ et l'élévation de variance $\sigma_{\text{baro}}^2(RPM)$ induits par les turbulences d'hélice, afin d'adapter le bruit de processus de dérive de biais $\sigma_b^2$ dans la Situation 3.
+\end{enumerate}
+
+\end{document}
+
+

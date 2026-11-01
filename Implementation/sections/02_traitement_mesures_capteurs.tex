@@ -1,0 +1,118 @@
+\documentclass[../Implementation.tex]{subfiles}
+\begin{document}
+
+\section{Conditionnement et Prétraitement des Mesures Capteurs}
+
+\subsection{Sorties des Centrales Inertielles et Couplage avec les Formulations de Kalman}
+
+\subsubsection{Complémentarité des centrales CMPS12 et Adafruit BNO085}
+L'architecture matérielle du dirigeable, caractérisée en détail dans le document compagnon \textbf{\texttt{Materiel.pdf}} (Section 2), comprend deux centrales inertielles aux topologies distinctes :
+\begin{enumerate}
+    \item \textbf{Module CMPS12 (Robot Electronics) :} 
+    Composé d'un capteur Bosch BNO055 interfacé par un microcontrôleur d'usine PIC. Ce module délivre exclusivement les angles d'Euler $(\phi, \theta, \psi)$ et l'accélération brute avec gravité $\mathbf{a}_{mes} = \mathbf{f} = \mathbf{a}_{lin} - R^T \mathbf{g}$. Aucun registre quaternion n'est directement exposé par le firmware du CMPS12.
+    \item \textbf{Module Adafruit BNO085 (CEVA / Hillcrest Labs) :} 
+    Équipé du coprocesseur de fusion SH-2. Il délivre nativement les quaternions de rotation unitaires sans singularité (\lstinline|SH2_ROTATION_VECTOR| ou \lstinline|SH2_GAME_ROTATION_VECTOR|) et permet de configurer au choix l'accélération brute avec gravité (\lstinline|SH2_ACCELEROMETER|) ou l'accélération linéaire sans gravité (\lstinline|SH2_LINEAR_ACCELERATION|).
+\end{enumerate}
+
+\subsubsection{Stratégies d'implémentation en relation avec \texttt{Formulations\_Kalman.pdf}}
+Dans le document théorique \textbf{\texttt{Formulations\_Kalman.pdf}}, chaque dynamique physique est rigoureusement formalisée selon deux approches mathématiques :
+\begin{itemize}
+    \item \textbf{Variante A (Angles d'Euler) :} Utilise les angles $(\phi, \theta, \psi)$ avec Jacobiennes trigonométriques $M(\Omega)$ et matrice cinématique $R_c(\Omega)$.
+    \item \textbf{Variante B (Quaternions d'erreur ESKF sur $SO(3)$) :} Représente l'attitude par un quaternion unitaire global $\hat{q} \in \mathbb{S}^3$ et exprime l'incertitude dans l'espace tangent minimal $\delta\boldsymbol{\theta} \in \mathbb{R}^3$, éliminant toute singularité et toute fonction trigonométrique dans la Jacobienne de transition $F_k$.
+\end{itemize}
+
+Selon les capteurs physiquement actifs sur le dirigeable, l'implémentation logicielle se structure selon trois options :
+
+\paragraph{Option 1 — Exploitation du CMPS12 seul (Alignement sur la Variante A) :}
+\begin{itemize}
+    \item Cette chaîne logicielle s'aligne directement sur la \textbf{Situation 2 — Variante A} de \textbf{\texttt{Formulations\_Kalman.pdf}} : le vecteur de mesure d'attitude reçoit les angles bruts $z_{att} = [\phi_{cmps}, \theta_{cmps}, \psi_{cmps}]^T$. Le repliement angulaire est géré dans l'innovation : $y_\Omega = \text{wrapToPi}(z_{att} - \hat{\Omega})$.
+    \item L'accélération brute avec pesanteur correspond au vecteur $\mathbf{a}^b$ injecté dans la dynamique de vitesse. La pesanteur est soustraite analytiquement dans le repère global de navigation :
+    \begin{equation}
+        \hat{V}_{k+1} = \hat{V}_k + \left( R_{b \to \text{nav}}(\hat{\Omega}_k) \begin{bmatrix} a_x^b \\ a_y^b \\ a_z^b \end{bmatrix}_{cmps} - \begin{bmatrix} 0 \\ 0 \\ g \end{bmatrix} \right) dt
+    \end{equation}
+    \item \textit{Alternative ESKF :} Si l'on souhaite éliminer les singularités de tangage tout en conservant le CMPS12, le pilote C++ applique une conversion amont Euler $\to$ Quaternion dès la réception I2C ($< 0.3\,\mu\text{s}$, formalisée en Section 2 de \textbf{\texttt{Formulations\_Kalman.pdf}}).
+\end{itemize}
+
+\paragraph{Option 2 — Exploitation du BNO085 seul (Alignement sur la Variante B - ESKF) :}
+\begin{itemize}
+    \item Cette chaîne met en œuvre la \textbf{Situation 2 (ou 3) — Variante B (ESKF)} de \textbf{\texttt{Formulations\_Kalman.pdf}} : l'attitude globale est représentée par le quaternion $\hat{q}$, et la mesure native $z_q$ alimente l'innovation d'attitude sur la variété : $\delta q = z_q \otimes \hat{q}^{-1} \to \delta\boldsymbol{\theta} \in \mathbb{R}^3$.
+    \item \textit{Recommandation sur l'accélération :} Bien que le BNO085 puisse fournir une accélération linéaire sans pesanteur, il est préconisé de le configurer en \textbf{accélération brute avec gravité} (\lstinline|SH2_ACCELEROMETER|). En effet, l'estimation interne de gravité du micrologiciel Hillcrest est sujette à des dérives lors de virages longs, alors que le filtre Kalman global projette et soustrait rigoureusement la pesanteur via l'attitude multi-capteurs consolidée.
+\end{itemize}
+
+\paragraph{Option 3 — Fusion hybride redondante BNO085 + CMPS12 (Configuration de référence) :}
+\begin{itemize}
+    \item Le \textbf{BNO085} constitue la \textbf{centrale primaire haute fréquence} ($100 - 200\,\text{Hz}$) : ses quaternions et son accélération brute pilotent la prédiction et l'attitude ESKF.
+    \item Le \textbf{CMPS12} agit comme \textbf{boussole magnétique de référence absolue} : seule sa mesure scalaire de cap $z_\psi = \psi_{cmps}$ est exploitée pour borner la dérive en lacet du BNO085 par une mise à jour scalaire ultra-rapide ($m=1$).
+    \item Une tâche périodique de surveillance croisée (\textit{cross-check}) compare les accélérations des deux puces afin d'isoler immédiatement tout capteur défaillant.
+\end{itemize}
+
+\subsection{Évaluation du Coût de Calcul de la Soustraction de Pesanteur (Option 2)}
+
+La soustraction analytique de la pesanteur dans le repère de navigation s'exprime par :
+\begin{equation}
+    a_{\text{nav}} = R(\hat{q}) \cdot f_b - \begin{bmatrix} 0 \\ 0 \\ g \end{bmatrix}
+\end{equation}
+En appliquant la formule vectorielle directe de rotation par quaternion (sans instanciation de la matrice $3 \times 3$) :
+\begin{equation}
+    a_{\text{nav}} = f_b + 2 \mathbf{q}_v \times \left( \mathbf{q}_v \times f_b + q_w f_b \right) - \begin{bmatrix} 0 \\ 0 \\ g \end{bmatrix}
+\end{equation}
+Le décompte d'opérations élémentaires flottantes (FLOP) s'établit à :
+\begin{itemize}
+    \item 2 produits vectoriels : $2 \times 6 = 12$ multiplications et $2 \times 3 = 6$ soustractions.
+    \item 1 produit scalaire-vecteur : $3$ multiplications.
+    \item Sommes vectorielles et soustraction de $g$ : $7$ additions/soustractions.
+    \item \textbf{Total :} 33 opérations flottantes élémentaires (FLOP).
+\end{itemize}
+
+Sur le processeur ARM Cortex-M7 à $600\,\text{MHz}$ de la Teensy 4.1, la FPU matérielle exécute les instructions \lstinline|VFMA.F32| (Fused Multiply-Accumulate) en \textbf{1 cycle d'horloge}. Le temps de calcul réel requis est donc :
+\begin{equation}
+    t_{calcul} \approx 30 \text{ cycles} \times \frac{1}{600 \times 10^6\,\text{Hz}} = 50\,\text{ns} = \mathbf{0.05\,\mu\text{s}}
+\end{equation}
+Pour une période de calcul de $10\,\text{ms}$ ($100\,\text{Hz}$), ce calcul consomme \textbf{$0.0005\%$ du temps processeur}. Ce coût est strictement négligeable et confirme le bien-fondé de l'Option 2.
+
+\subsection{Détermination Expérimentale de la Matrice de Covariance de Bruit \texorpdfstring{$R$}{R}}
+
+La matrice diagonale $R$ paramètre le degré de confiance accordé à chaque instrument :
+\begin{enumerate}
+    \item \textbf{Valeurs indicatives constructeurs :}
+    Extraites des fiches techniques documentées dans \textbf{\texttt{Materiel.pdf}} et synthétisées en Section 1.3 de \textbf{\texttt{Formulations\_Kalman.pdf}}.
+    \item \textbf{Étalonnage expérimental sur banc stationnaire :}
+    Nacelle posée au sol à température stabilisée, acquisition de $10\,000$ points de mesure sur carte SD (firmware avec \lstinline|ENABLE_SD_LOGGING = 1|). Calcul de la variance empirique :
+    \begin{equation}
+        R_{ii} = \hat{\sigma}_i^2 = \frac{1}{N-1}\sum_{k=1}^N (z_{i,k} - \bar{z}_i)^2
+    \end{equation}
+    \item \textbf{Facteur de sécurité environnemental :}
+    En vol, en raison des vibrations transmises par les hélices et des micro-courants induits, les termes diagonaux $R_{ii}$ sont multipliés par un facteur de sécurité $k_{env} \in [1.5, 3.0]$.
+\end{enumerate}
+
+\subsection{Compensation du Déphasage Temporel des Capteurs Lents (GNSS et UWB)}
+
+Les récepteurs de position spatiale présentent une latence intrinsèque de calcul et de transmission série non négligeable :
+\begin{itemize}
+    \item Récepteur GNSS (PA1616S) : latence de calcul de position et de décodage série NMEA de $100\text{ à }200\,\text{ms}$.
+    \item Balises UWB (DWM1001) : latence d'échange radio ToF et de calcul PANS de $20\text{ à }35\,\text{ms}$.
+\end{itemize}
+
+Injecter à l'instant courant $t_k$ une mesure correspondant à la position du véhicule à l'instant passé $t_k - \tau_{latence}$ introduit une erreur de traînage proportionnelle à la vitesse de vol. En raison des accélérations modérées du dirigeable, cette latence est compensée de manière optimale au premier ordre avant l'injection dans le calcul de l'innovation :
+\begin{equation}
+    z_{\text{pos}, k}^{\text{compensé}} = z_{\text{pos}, brut} + \hat{V}_k \cdot \tau_{latence}
+\end{equation}
+Cette compensation annule le déphasage sans exiger le stockage d'un historique lourd de vecteurs d'état passés en mémoire SRAM.
+
+\subsection{Gestion des Bus Matériels et Interrogation Périodique (Polling)}
+
+\subsubsection{Stratégie de communication : Interruptions vs Polling non-bloquant}
+Les fonctionnalités d'interruption et de mise en mémoire tampon des différents modules sont détaillées dans le document \textbf{\texttt{Materiel.pdf}} (Section 1). 
+
+Dans l'éventualité où les lignes d'interruption matérielles (telles que \lstinline|H_INTN| pour le BNO085 ou \lstinline|INT| pour le BMP581) ne sont pas routées sur le circuit imprimé (PCB) de vol :
+\begin{itemize}
+    \item \textbf{Faisabilité démontrée du Polling non-bloquant :}
+    À la fréquence d'horloge de $600\,\text{MHz}$, la Teensy 4.1 peut interroger cycliquement les registres de données I2C à cadence fixe (toutes les $5\,\text{ms}$ pour l'IMU, toutes les $25\,\text{ms}$ pour le baromètre) en testant le compteur temps réel \lstinline|ARM_DWT_CYCCNT|.
+    \item \textbf{Cadencement du bus I2C en Fast-Mode (400 kHz) :}
+    Configuré par l'instruction \lstinline|Wire.setClock(400000);|. À cette cadence, le transfert complet d'une trame de 6 octets requiert environ $150\,\mu\text{s}$, monopolisant moins de $1.5\%$ du temps processeur à $100\,\text{Hz}$.
+    \item \textbf{Mesure de fiabilisation pour le protocole SH-2 (BNO085) :}
+    Si le polling I2C aveugle du BNO085 engendre des collisions de paquets SHTP, la seule modification matérielle préconisée consiste à relier la broche \lstinline|H_INTN| à une entrée GPIO disponible de la Teensy 4.1 par un fil volant de reprise (\textit{bodge wire}), déclenchant la lecture I2C uniquement lorsque le coprocesseur SH-2 a abaissé la ligne d'interruption.
+\end{itemize}
+
+\end{document}
+

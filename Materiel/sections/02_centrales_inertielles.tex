@@ -1,0 +1,123 @@
+\documentclass[../Materiel.tex]{subfiles}
+\begin{document}
+
+\section{Centrales Inertielles : CMPS12 et Adafruit BNO085}
+
+\subsection{Module Boussole Électronique CMPS12 (Devantech)}
+
+\subsubsection{Composant interne vs Module commercial}
+Le module CMPS12 commercialisé par Robot Electronics / Devantech intègre physiquement un capteur Bosch Sensortec \textbf{BNO055}. 
+
+\textbf{Particularité architecturale majeure :} L'utilisateur n'interagit jamais directement avec les registres natifs du BNO055. Un microcontrôleur PIC préprogrammé fait office d'intermédiaire matériel : il configure le BNO055 en mode fusion interne, interroge ses registres en permanence, convertit les données et expose sa propre cartographie de registres I2C/UART simplifiée.
+
+\begin{figure}[htbp]
+\centering
+\small
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+\textbf{Broche CMPS12} & \textbf{Type} & \textbf{Description} & \textbf{Tension} & \textbf{Connexion PCB hôte} \\
+\hline
+VCC & Alimentation & Entrée régulateur intégré & $3.3\,\text{V} - 5\,\text{V}$ & Bus $3.3\,\text{V}$ ou $5\,\text{V}$ \\
+SDA & E/S I2C & Ligne de données série & $3.3\,\text{V} - 5\,\text{V}$ & Broche 18 (SDA0) Teensy 4.1 \\
+SCL & Entrée I2C & Ligne d'horloge série & $3.3\,\text{V} - 5\,\text{V}$ & Broche 19 (SCL0) Teensy 4.1 \\
+GND & Masse & Référence 0V & $0\,\text{V}$ & Plan de masse commun \\
+\hline
+\end{tabular}
+\caption{Brochage physique du connecteur standard CMPS12.}
+\end{figure}
+
+\subsubsection{Cartographie des registres utilisateurs I2C (Adresse \texttt{0x60})}
+Le protocole I2C s'exécute en lisant des plages d'octets consécutives à partir de l'adresse de registre spécifiée :
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{cccl}
+\toprule
+\textbf{Registre (Hex)} & \textbf{Taille} & \textbf{Format} & \textbf{Grandeur physique mesurée} \\
+\midrule
+\texttt{0x00} & 1 octet & \texttt{uint8} & Version logicielle du firmware PIC \\
+\texttt{0x01} & 1 octet & \texttt{uint8} & Cap boussole 8 bits ($0\text{ à }255$ pour $0\text{ à }360^\circ$) \\
+\texttt{0x02 - 0x03} & 2 octets & \texttt{uint16} & Cap boussole 16 bits ($0\text{ à }3599$ pour $0.0\text{ à }359.9^\circ$, MSB en \texttt{0x02}) \\
+\texttt{0x04} & 1 octet & \texttt{int8} & Angle de tangage (\textit{Pitch}) signée ($\pm 90^\circ$ ou $\pm 180^\circ$) \\
+\texttt{0x05} & 1 octet & \texttt{int8} & Angle de roulis (\textit{Roll}) signée ($\pm 90^\circ$) \\
+\texttt{0x06 - 0x0B} & 6 octets & $3 \times \texttt{int16}$ & Champs magnétiques bruts selon les axes $X, Y, Z$ (signés) \\
+\texttt{0x0C - 0x11} & 6 octets & $3 \times \texttt{int16}$ & Accélérations brutes \textbf{avec pesanteur} selon $X, Y, Z$ (signées) \\
+\texttt{0x12 - 0x17} & 6 octets & $3 \times \texttt{int16}$ & Vitesses angulaires gyrométriques brutes selon $X, Y, Z$ (signées) \\
+\texttt{0x18} & 1 octet & \texttt{int8} & Température interne du BNO055 ($^\circ\text{C}$) \\
+\texttt{0x1E} & 1 octet & \texttt{uint8} & Registre d'état de calibration ($2\text{ bits}$ Mag, Accel, Gyro, Sys) \\
+\bottomrule
+\end{tabular}
+\caption{Plan d'adressage I2C du module CMPS12.}
+\end{table}
+
+\subsubsection{Limitations techniques du module CMPS12 pour l'estimation d'état}
+\begin{itemize}
+    \item \textbf{Inaccessibilité des quaternions :} Le firmware du PIC ne propose aucun registre quaternionique. L'orientation est irrémédiablement délivrée sous forme d'angles d'Euler, induisant un blocage de cardan théorique si l'assiette approchait $\pm 90^\circ$.
+    \item \textbf{Inaccessibilité de l'accélération linéaire sans gravité :} Le CMPS12 n'expose que l'accélération brute (force spécifique $f_b$). La gravité doit être soustraite par le logiciel externe.
+    \item \textbf{Absence de broche d'interruption (\texttt{DRDY}) et de mémoire FIFO :} Le CMPS12 ne signale pas quand une nouvelle mesure est prête. La lecture s'effectue obligatoirement par scrutation (\textit{polling}) périodique I2C.
+\end{itemize}
+
+---
+
+\subsection{Module Adafruit 9-DOF BNO085 (CEVA / Hillcrest Labs)}
+
+\subsubsection{Composant interne vs Breakout Adafruit}
+Le composant CEVA BNO085 est un \textit{System-in-Package} (SiP) regroupant un accéléromètre triaxial, un gyroscope triaxial, un magnétomètre et un cœur de calcul ARM Cortex-M0+ exécutant le micrologiciel propriétaire \textbf{SH-2}.
+
+Le breakout commercialisé par Adafruit intègre le régulateur de tension $3.3\,\text{V}$, les résistances de tirage I2C (\textit{pull-ups}) de $10\,\text{k}\Omega$, et route l'ensemble des lignes de contrôle vers un connecteur traversant et deux connecteurs JST-SH (STEMMA QT / Qwiic).
+
+\begin{figure}[htbp]
+\centering
+\small
+\begin{tabular}{|c|c|c|c|l|}
+\hline
+\textbf{Broche Breakout} & \textbf{Broche Puce} & \textbf{Type} & \textbf{Tension} & \textbf{Rôle et Comportement} \\
+\hline
+\texttt{VIN} & -- & Alimentation & $3.0\,\text{V} - 5.5\,\text{V}$ & Alimentation principale du module \\
+\texttt{3Vo} & \texttt{VDD/VDDIO} & Sortie régulée & $3.3\,\text{V}$ & Sortie du LDO interne (max $100\,\text{mA}$) \\
+\texttt{GND} & \texttt{GND} & Masse & $0\,\text{V}$ & Référence de potentiel \\
+\texttt{SCL} & \texttt{SCK/SCL} & E/S I2C & $3.3\,\text{V}$ (Tol. 5V) & Horloge I2C (supporte jusqu'à $400\,\text{kHz}$) \\
+\texttt{SDA} & \texttt{SDA} & E/S I2C & $3.3\,\text{V}$ (Tol. 5V) & Données I2C \\
+\texttt{INT} & \texttt{H\_INTN} & Sortie numérique & $3.3\,\text{V}$ & \textbf{Interruption active à l'état bas} (SHTP Ready) \\
+\texttt{RST} & \texttt{NRST} & Entrée numérique & $3.3\,\text{V}$ & \textbf{Reset actif bas} (redémarrage du SH-2) \\
+\texttt{BOOT} & \texttt{BOOTN} & Entrée numérique & $3.3\,\text{V}$ & Mode bootloader (tirée au niveau haut) \\
+\texttt{DI} & \texttt{H\_MOSI} & Entrée SPI & $3.3\,\text{V}$ & Utilisée pour sélection du protocole (PS0/PS1) \\
+\hline
+\end{tabular}
+\caption{Affectation des broches du module Adafruit BNO085.}
+\end{figure}
+
+\subsubsection{Protocole SHTP et Rapports SH-2 Disponibles}
+Le BNO085 ne fonctionne pas par registres I2C traditionnels mais via le protocole en couches \textbf{SHTP} (\textit{Sensor Hub Transport Protocol}). L'application configure les capteurs en envoyant des requêtes d'activation de rapports avec leur période d'échantillonnage désirée en microsecondes :
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{p{5.5cm} p{2.2cm} p{2.2cm} p{5.5cm}}
+\toprule
+\textbf{Nom du Rapport SH-2} & \textbf{Identifiant} & \textbf{Fréquence max} & \textbf{Grandeurs délivrées} \\
+\midrule
+\texttt{SH2\_ROTATION\_VECTOR} & \texttt{0x05} & $400\,\text{Hz}$ & Quaternion absolu $(q_r, q_i, q_j, q_k)$ et précision estimée en radians. \\
+\addlinespace
+\texttt{SH2\_GAME\_ROTATION\_VECTOR} & \texttt{0x08} & $400\,\text{Hz}$ & \textbf{Quaternion sans magnétomètre} (immunité totale aux perturbations moteurs). \\
+\addlinespace
+\texttt{SH2\_ACCELEROMETER} & \texttt{0x01} & $500\,\text{Hz}$ & Accélération brute triaxiale avec gravité ($X, Y, Z$ en $\text{m/s}^2$). \\
+\addlinespace
+\texttt{SH2\_LINEAR\_ACCELERATION} & \texttt{0x04} & $400\,\text{Hz}$ & Accélération linéaire pure sans pesanteur ($X, Y, Z$ en $\text{m/s}^2$). \\
+\addlinespace
+\texttt{SH2\_GYROSCOPE\_CALIBRATED} & \texttt{0x02} & $400\,\text{Hz}$ & Vitesse angulaire étalonnée en ligne ($p, q, r$ en $\text{rad/s}$). \\
+\bottomrule
+\end{tabular}
+\caption{Principaux rapports d'estimation d'état du processeur SH-2.}
+\end{table}
+
+\subsubsection{Comportement de la broche d'interruption \texttt{H\_INTN}}
+La broche \texttt{H\_INTN} est tirée à l'état bas par le BNO085 dès qu'au moins un rapport est prêt dans son tampon mémoire interne. 
+\begin{itemize}
+    \item \textbf{Mode interruption câblé :} L'interruption déclenche la lecture immédiate du paquet SHTP via la fonction \texttt{bno08x.getSensorEvent()}.
+    \item \textbf{Mode scrutation sans broche d'interruption (PCB actuel) :} Si la broche n'est pas reliée à la Teensy, le microcontrôleur doit interroger périodiquement le bus I2C à cadence rapide (ex. toutes les $5\,\text{ms}$). Si aucun paquet n'est prêt, le BNO085 émet un NACK ou renvoie un en-tête de longueur nulle sans bloquer le bus.
+\end{itemize}
+
+\end{document}
+

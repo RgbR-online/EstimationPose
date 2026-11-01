@@ -1,0 +1,57 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{amsmath}
+\setcounter{MaxMatrixCols}{20}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{geometry}
+\geometry{a4paper, margin=2.5cm}
+\usepackage{subfiles}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    citecolor=blue!70!black,
+    urlcolor=blue!70!black
+}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue!80!black}\bfseries,
+    commentstyle=\color{green!50!black}\itshape,
+    stringstyle=\color{red!70!black},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    stepnumber=1,
+    numbersep=8pt,
+    frame=single,
+    breaklines=true,
+    captionpos=b,
+    language=C++
+}
+
+\title{Spécifications et Caractérisation Matérielle des Capteurs\\
+\large Architecture Électronique, Protocoles et Capacités Physiques (Teensy 4.1)}
+\author{Grégory Barou}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\subfile{sections/01_introduction_materiel.tex}
+\subfile{sections/02_centrales_inertielles.tex}
+\subfile{sections/03_altimetrie_barometrique.tex}
+\subfile{sections/04_positionnement_absolu.tex}
+\subfile{sections/05_calculateur_teensy41.tex}
+
+\end{document}
+

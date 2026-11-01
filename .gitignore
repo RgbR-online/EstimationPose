@@ -1,5 +1,55 @@
-# Dépôt de traçabilité documentaire : Pilotage/ (documents du projet) et
-# Passations/ (notes de passation). Le reste de Programmation/ possède son
-# propre historique Git ou n'est pas de la documentation :
-FromTo Github/
-NvCapteurs/
+# Dépôt de traçabilité documentaire et des sources d'ingénierie, racine :
+# EstimationPose/. Les documents de pilotage vivent dans Programmation/Pilotage/,
+# les notes de passation dans Programmation/Passations/. Le dépôt de code
+# (Programmation/FromTo Github) reste un dépôt Git autonome et n'est pas suivi ici.
+
+# --- Dépôts Git imbriqués et espaces de travail non versionnés ---
+Programmation/FromTo Github/
+Programmation/NvCapteurs/
+
+# --- Données brutes, supports de cours, sources externes volumineuses ---
+Data/
+EKF_Theory/
+Elec/
+Materiel/Datasheets/
+
+# --- Artefacts LaTeX (les .tex et les PDF assemblés restent versionnés) ---
+*.aux
+*.log
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.nav
+*.snm
+*.vrb
+*.bbl
+*.blg
+*.lof
+*.lot
+*.bcf
+*.run.xml
+Formulations_Kalman/sections/*.pdf
+Implementation/sections/*.pdf
+Materiel/sections/*.pdf
+
+# --- Artefacts PlatformIO / compilation ---
+.pio/
+.platformio/
+compile_commands.json
+.vscode/ipch/
+.vscode/.browse.c_cpp.db*
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+
+# --- Outils locaux et métadonnées système ---
+.kilo/
+.kilocodeignore
+Thumbs.db
+desktop.ini
+.DS_Store
+System Volume Information/

@@ -1,0 +1,85 @@
+\documentclass[../Materiel.tex]{subfiles}
+\begin{document}
+
+\section{Architecture Matérielle et Inventaire des Fiches Techniques}
+
+\subsection{Objectifs du Document Matériel}
+Ce document constitue le référentiel physique et électronique complet pour le système d'estimation de pose et de contrôle du dirigeable autonome. Il détaille pour chaque équipement :
+\begin{itemize}
+    \item La distinction technique indispensable entre le \textbf{composant nu} (puce MEMS/ASIC d'origine) et le \textbf{module/breakout commercialisé} (circuit imprimé intégrant régulateur, translateurs de niveaux et microcontrôleur intermédiaire éventuel).
+    \item Les registres internes, formats de données et protocoles de communication (I2C, SPI, UART).
+    \item Les fonctionnalités matérielles avancées : broches d'interruption (\texttt{INT}, \texttt{DRDY}, \texttt{PPS}), mémoires tampons (\textit{FIFO}) et filtres numériques internes (IIR, DLPF).
+    \item Les contraintes de câblage sur le circuit imprimé (PCB) hôte piloté par la Teensy 4.1.
+\end{itemize}
+
+\subsection{Tableau Synthétique des Capacités des Capteurs}
+
+Le tableau~\ref{tab:synthese_materielle} récapitule l'ensemble des modules capteurs embarqués ou évalués sur le banc de test.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{p{2.6cm} p{2.2cm} p{1.6cm} p{2.0cm} p{1.6cm} p{1.8cm} p{2.2cm}}
+\toprule
+\textbf{Module} & \textbf{Puce Interne} & \textbf{Bus} & \textbf{Adresse / Débit} & \textbf{Broche INT} & \textbf{Buffer FIFO} & \textbf{Filtre Interne} \\
+\midrule
+\textbf{CMPS12} & BNO055 + PIC & I2C / Série & \texttt{0x60} (défaut) & Aucune & Aucun & Fusion BNO055 \\
+\addlinespace
+\textbf{Adafruit BNO085} & BNO085 (SH-2) & I2C / SPI & \texttt{0x4A} (ou \texttt{0x47}) & \texttt{H\_INTN} & File SHTP & ARVR / Stabilis. \\
+\addlinespace
+\textbf{DFRobot BMP581} & BMP581 Bosch & I2C / SPI & \texttt{0x47} (ou \texttt{0x4A}) & \texttt{INT} & 32 trames & IIR (1 à 127) \\
+\addlinespace
+\textbf{Adafruit GPS} & MTK3333 / PA1616S & I2C / UART & \texttt{0x10} / 9600 Bd & \texttt{PPS} & 255 octets & Filtre d'éphém. \\
+\addlinespace
+\textbf{Decawave UWB} & DW1000 + nRF52 & UART / SPI & 115200 Bauds & \texttt{GPIO} & Tampon PANS & Moyennage ToF \\
+\bottomrule
+\end{tabular}
+\caption{Synthèse comparative des fonctionnalités matérielles des modules capteurs.}
+\label{tab:synthese_materielle}
+\end{table}
+
+\subsection{Inventaire et État des Fiches Techniques (\textit{Datasheets})}
+
+Une recherche exhaustive dans l'arborescence du projet (dossiers \texttt{Programmation/Datasheets/} et \texttt{sensor\_datasheets/}) a permis de recenser les documents déjà capitalisés et d'identifier les documents constructeurs manquants.
+
+\subsubsection{Organisation de l'arborescence documentaire (\texttt{Materiel/Datasheets/})}
+L'intégralité des fiches techniques des composants et des modules de vol a été téléchargée et archivée localement dans le dossier \texttt{Materiel/Datasheets/} selon l'organisation thématique suivante :
+
+\begin{enumerate}
+    \item \textbf{Baromètres (\texttt{Barometre\_BMP581/} et \texttt{Barometre\_MPL3115A2/}) :}
+    \begin{itemize}
+        \item \textit{BMP581 (Actif) — Puce brute Bosch Sensortec :} \texttt{BST-BMP581-DS004.pdf} (spécifications électriques, registres, bruit RMS et modes de filtrage IIR).
+        \item \textit{BMP581 (Actif) — Module DFRobot Fermion (SEN0667) :} \texttt{DFRobot\_Fermion\_BMP581\_SEN0667\_Schematics.pdf}, \texttt{DFRobot\_Fermion\_BMP581\_SEN0667\_Datasheet.pdf} et \texttt{DFRobot\_Fermion\_BMP581\_SEN0667\_Layout.pdf}.
+        \item \textit{MPL3115A2 (Historique) — Puce NXP :} \texttt{MPL3115A2\_datasheet.pdf} et note d'application \texttt{AN4519.pdf}.
+    \end{itemize}
+
+    \item \textbf{Centrales Inertielles (\texttt{IMU\_BNO085/} et \texttt{IMU\_CMPS12/}) :}
+    \begin{itemize}
+        \item \textit{BNO085 (Primaire) — Module Adafruit 9-DOF :} \texttt{Adafruit\_9-DOF\_Orientation\_IMU\_BNO085.pdf} (schéma de câblage, régulation de tension et accès I2C/SPI).
+        \item \textit{BNO085 (Primaire) — Puce CEVA / Hillcrest :} \texttt{BNO080\_085-Datasheet.pdf}.
+        \item \textit{BNO085 (Primaire) — Manuel du coprocesseur SH-2 :} \texttt{SH-2-Reference-Manual-1000-3625.pdf} (format des trames SHTP et rapports de rotation).
+        \item \textit{CMPS12 (Boussole secondaire) — Module Devantech :} \texttt{cmps12\_doc.pdf}.
+        \item \textit{CMPS12 (Boussole secondaire) — Puce Bosch BNO055 :} \texttt{BNO055\_datasheet.pdf}.
+    \end{itemize}
+
+    \item \textbf{Positionnement Absolu GNSS (\texttt{GPS/}) :}
+    \begin{itemize}
+        \item \textit{Puce / Module OEM CD-TOP PA1010D :} \texttt{CD\_PA1010D\_Datasheet\_v03.pdf} (spécifications RF, sensibilité -165 dBm et consommation).
+        \item \textit{Module Breakout Adafruit Mini GPS :} \texttt{Adafruit\_Mini\_GPS\_PA1010D\_Module.pdf} (schématique et intégration d'antenne patch).
+    \end{itemize}
+
+    \item \textbf{Positionnement Absolu Local UWB (\texttt{UWB/}) :}
+    \begin{itemize}
+        \item \textit{Transceiver radio Decawave DW1000 :} \texttt{Decawave\_DW1000\_User\_Manual\_Spec.pdf} (registres SPI, calibration d'antenne et couches ToF/TDoA).
+        \item \textit{Modules et cartes Décawave DWM1001 :} \texttt{DWM1001C\_Datasheet.pdf}, \texttt{DWM1001-DEV\_Datasheet.pdf}, \texttt{DWM1001-API-Guide.pdf}, \texttt{DWM1001-Firmware-User-Guide.pdf} et schémas matériels.
+    \end{itemize}
+
+    \item \textbf{Calculateur Embarqué et Processeur (\texttt{Teensy\_4.1/}) :}
+    \begin{itemize}
+        \item \textit{Carte de vol PJRC Teensy 4.1 :} Fiches de brochage officiel recto/verso \texttt{Teensy41\_Pinout\_Card\_Front.pdf}, \texttt{Teensy41\_Pinout\_Card\_Back.pdf}, schématique électrique \texttt{Teensy41\_Schematic.png} et brochage SDIO \texttt{Teensy41\_SDCard\_Pinout.png}.
+        \item \textit{Processeur NXP i.MXRT1062 (Cortex-M7) :} Fiche technique complète \texttt{NXP\_iMXRT1060\_Datasheet\_IMXRT1060CEC.pdf} (caractéristiques électriques, mémoire TCM et matrice d'horloge 600 MHz).
+    \end{itemize}
+\end{enumerate}
+
+\end{document}
+

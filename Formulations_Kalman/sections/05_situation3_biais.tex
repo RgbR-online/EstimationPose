@@ -1,0 +1,97 @@
+\documentclass[../Formulations_Kalman.tex]{subfiles}
+\begin{document}
+
+\subsection{Situation 3 : Avec biais du baromètre}
+Cette configuration reprend l'intégralité du modèle étendu à entrées inertielles de la Situation 2 et y ajoute l'estimation en temps réel de la dérive lente (biais) du capteur barométrique. Le biais est modélisé sous la forme d'une marche aléatoire $b_{\text{baro}, k+1} = b_{\text{baro}, k} + w_{b, k}$.
+
+L'extension s'applique de manière symétrique et découplée aux deux variantes d'attitude (Angles d'Euler et Quaternions ESKF).
+
+\subsubsection{Extension dans les deux variantes d'attitude}
+
+\paragraph{Variante A : Formulation en Angles d'Euler (Standard EKF)}
+\begin{itemize}
+    \item \textbf{Vecteur d'état ($\dim = 16$) :}
+    \begin{equation}
+    \hat{x} = \begin{bmatrix} X & Y & Z & V_x & V_y & V_z & \phi & \theta & \psi & p & q & r & a_x^b & a_y^b & a_z^b & b_{\text{baro}} \end{bmatrix}^T
+    \end{equation}
+    \item \textbf{Matrice de transition $F_{k,\text{aug}}$ ($\dim = 16 \times 16$) :}
+    \begin{equation}
+    F_{k,\text{aug}} = \begin{bmatrix}
+    & & & 0_{15\times1} \\
+    & F_k & & \vdots \\
+    & & & 0_{15\times1} \\
+    0 & \dots & 0 & 1
+    \end{bmatrix}
+    \end{equation}
+    où $F_k$ est la matrice Jacobienne $15 \times 15$ d'Euler calculée à la Situation 2.
+\end{itemize}
+
+\paragraph{Variante B : Formulation en Quaternions d'erreur (ESKF)}
+\begin{itemize}
+    \item \textbf{Vecteur d'état nominal ($\dim = 17$) et d'état d'erreur ($\dim = 16$) :}
+    \begin{align}
+    \hat{x}_{\text{nom}} &= \begin{bmatrix} \mathbf{p} & \mathbf{v} & q & \boldsymbol{\omega} & \mathbf{a}^b & b_{\text{baro}} \end{bmatrix}^T \quad (q \in \mathbb{H}_1) \\
+    \delta x &= \begin{bmatrix} \delta\mathbf{p} & \delta\mathbf{v} & \delta\boldsymbol{\theta} & \delta\boldsymbol{\omega} & \delta\mathbf{a}^b & \delta b_{\text{baro}} \end{bmatrix}^T \quad (\dim = 16)
+    \end{align}
+    \item \textbf{Matrice de transition d'erreur $F_{\delta, k,\text{aug}}$ ($\dim = 16 \times 16$) :}
+    \begin{equation}
+    F_{\delta, k,\text{aug}} = \begin{bmatrix}
+    & & & 0_{15\times1} \\
+    & F_{\delta, k} & & \vdots \\
+    & & & 0_{15\times1} \\
+    0 & \dots & 0 & 1
+    \end{bmatrix}
+    \end{equation}
+    où $F_{\delta, k}$ est la matrice sans trigonométrie de la Situation 2.
+\end{itemize}
+
+---
+
+\subsubsection{Bruit de processus $Q_{k,\text{aug}}$ (Taille $16 \times 16$)}
+On adjoint à la matrice de covariance de bruit la variance de dérive $\sigma_b^2$ du baromètre :
+\begin{equation}
+Q_{k, \text{aug}} = \begin{bmatrix}
+& & & 0_{15\times1} \\
+& Q_k & & \vdots \\
+& & & 0_{15\times1} \\
+0 & \dots & 0 & \sigma_{b}^2 \cdot dt
+\end{bmatrix}
+\end{equation}
+où $\sigma_b^2$ est déduit des fiches constructeurs (ex. BMP581) ou calibré expérimentalement au repos.
+
+---
+
+\subsubsection{Matrice d'observation augmentée $H_{k+1,\text{aug}}$ (Taille $13 \times 16$)}
+Le biais agissant comme une dérive additive sur la mesure barométrique, la 13ème ligne de $H_{k+1}$ est modifiée pour lier l'altitude mesurée à la fois à l'altitude réelle $Z$ (colonne 3) et au biais $b_{\text{baro}}$ (colonne 16) :
+\begin{equation}
+H_{k+1,\text{aug}} = \begin{bmatrix}
+I_3 & 0_{3\times3} & 0_{3\times3} & 0_{3\times3} & 0_{3\times3} & 0_{3\times1} \\
+0_{3\times3} & 0_{3\times3} & I_3 & 0_{3\times3} & 0_{3\times3} & 0_{3\times1} \\
+0_{3\times3} & 0_{3\times3} & 0_{3\times3} & I_3 & 0_{3\times3} & 0_{3\times1} \\
+0_{3\times3} & 0_{3\times3} & 0_{3\times3} & 0_{3\times3} & I_3 & 0_{3\times1} \\
+\begin{matrix} 0\ 0\ 1 \end{matrix} & 0_{1\times3} & 0_{1\times3} & 0_{1\times3} & 0_{1\times3} & 1
+\end{bmatrix}
+\end{equation}
+Cette structure s'applique à l'identique pour la matrice $H_{\delta, k+1,\text{aug}}$ du filtre ESKF.
+
+---
+
+\subsubsection{Observabilité et séparation fréquentielle en vol}
+L'estimation conjointe de l'altitude réelle $Z$ et de la dérive lente $b_{\text{baro}}$ s'appuie sur une double stratégie :
+\begin{enumerate}
+    \item \textbf{Calibration initiale au sol :} Avant le décollage, une phase stationnaire fournit la référence d'altitude ($\hat{Z}_0 = 0$). Une tare initiale fixe $\hat{b}_{\text{baro}, 0} = 0$, éliminant le décalage statique initial.
+    \item \textbf{Séparation fréquentielle en vol :}
+    \begin{itemize}
+        \item Le baromètre numérique (ex. BMP581 avec résolution sub-décimétrique) capture la dynamique verticale rapide à court terme ($\pm 10\text{ cm}$).
+        \item Le capteur de position absolue ($Z_{\text{pos}}$ UWB ou GPS), bien que pénalisé par une plus forte dispersion géométrique ($k_z > 1$ ou $\text{VDOP} > 1.5 \times \text{HDOP}$), est strictement exempt de dérive temporelle à basse fréquence.
+    \end{itemize}
+    Ce recalage continu garantit l'observabilité du couple $(Z, b_{\text{baro}})$, permettant au filtre d'absorber les variations de pression atmosphérique dans $b_{\text{baro}}$ sans fausser la trajectoire réelle $Z$.
+\end{enumerate}
+
+---
+
+\subsubsection{Recommandation pour la Situation 3}
+Tout comme pour la Situation 2, la \textbf{Variante B (Quaternions / ESKF)} est la solution d'ingénierie optimale. L'adjonction de l'état scalaire $b_{\text{baro}}$ n'introduit aucun couplage avec les équations de rotation : l'ESKF conserve donc tous ses avantages d'efficacité de calcul et de robustesse par rapport à la formulation en angles d'Euler.
+
+\end{document}
+

@@ -1,0 +1,104 @@
+\documentclass[../Implementation.tex]{subfiles}
+\begin{document}
+
+\section{Périmètre Fonctionnel et Architecture Logicielle C++}
+
+\subsection{Périmètre de Modélisation : Cadre Purement Cinématique}
+
+\subsubsection{Périmètre cinématique des versions actuelles}
+L'ensemble des algorithmes d'estimation développés dans ce projet (Situations 1, 2 et 3) repose sur un \textbf{modèle purement cinématique} :
+\begin{itemize}
+    \item L'accéléromètre triaxial mesure directement la force spécifique locale $\mathbf{f} = \mathbf{a} - \mathbf{g}$, qui intègre la résultante exacte de toutes les forces extérieures appliquées (poussée des hélices, portance aérostatique, traînée aérodynamique, rafales de vent).
+    \item Le gyromètre triaxial mesure directement la vitesse de rotation angulaire instantanée $\boldsymbol{\omega}$ du solide.
+\end{itemize}
+
+\subsubsection{Justification de l'absence du modèle de masse ajoutée à ce stade}
+Dans le domaine aérostatique, le déplacement du dirigeable entraîne un volume de fluide important, ce qui engendre une matrice de masse ajoutée $M_a$. 
+
+Néanmoins, dans le cadre d'un observateur cinématique piloté par les capteurs inertiels, \textbf{la masse ajoutée, les coefficients de traînée aérobie et la commande des moteurs n'ont pas besoin d'être modélisés} : l'intégralité de leurs effets dynamiques réels est directement et fidèlement captée par les puces MEMS accélérométriques et gyrométriques.
+
+\subsubsection{Évolution vers un observateur dynamique ultérieur}
+La transition future vers un observateur dynamique complet (intégrant la consigne de poussée moteur $u$ en entrée de modèle prédictif d'état, les forces de traînée non-linéaires et le tenseur de masse ajoutée $M_a$) constituera un développement ultérieur du projet. Ce modèle dynamique sera calibré à partir des données réelles enregistrées sur carte MicroSD lors des campagnes d'essais au sol et en vol instrumenté.
+
+\subsection{Sélection et Configuration Statique du Modèle de Filtre}
+
+\subsubsection{Justification du choix statique à la compilation}
+Le système d'estimation de pose dispose de plusieurs formulations d'observateurs formalisées dans le document compagnon \textbf{\texttt{Formulations\_Kalman.pdf}} :
+\begin{itemize}
+    \item Situation 1 : Modèle cinématique minimal linéaire ($n = 6$).
+    \item Situation 2 : Modèle cinématique inertiel couplé (Variante A en Euler ou Variante B en Quaternions d'erreur ESKF, $n = 15$).
+    \item Situation 3 : Modèle complet avec estimation en ligne des biais capteurs ($n = 16$).
+\end{itemize}
+
+Dans un système embarqué temps réel critique, l'aiguillage dynamique du modèle par des structures conditionnelles à l'exécution (\lstinline|if/switch|) est formellement proscrit pour trois raisons architecturales :
+\begin{enumerate}
+    \item \textbf{Déterminisme temporel :} Les branchements conditionnels fréquents provoquent des ruptures du pipeline superscalaire (\textit{branch mispredictions}) sur le cœur ARM Cortex-M7 de la Teensy 4.1.
+    \item \textbf{Empreinte mémoire maximale inutile :} Un aiguillage dynamique imposerait d'allouer statiquement en RAM les structures matricielles de la dimension maximale ($n=16$), même lorsqu'un filtre allégé ($n=6$) est exécuté.
+    \item \textbf{Optimisations du compilateur :} L'instanciation dynamique empêche le compilateur GCC d'inliner les opérations d'algèbre linéaire et de déployer les instructions vectorielles SIMD associées aux dimensions fixes.
+\end{enumerate}
+
+L'architecture logicielle repose ainsi sur une \textbf{sélection statique à la compilation} par métaprogrammation C++ (templates et constantes \lstinline|constexpr|), centralisée dans le fichier de configuration \lstinline|FilterConfig.h| :
+
+\begin{lstlisting}
+// Selection du type d'observateur a la compilation
+enum class FilterType {
+    CINEMATIQUE_MINIMAL,    // Situation 1 (n=6)
+    INERTIEL_EULER,         // Situation 2 Variante A (n=15)
+    INERTIEL_ESKF,          // Situation 2 Variante B (n=15)
+    INERTIEL_AVEC_BIAIS     // Situation 3 Variante B (n=16)
+};
+
+// Choix actif pour la compilation du binaire embarque
+constexpr FilterType ACTIVE_FILTER = FilterType::INERTIEL_ESKF;
+\end{lstlisting}
+
+Grâce aux templates C++ et à la construction \lstinline|if constexpr| (norme C++17 supportée nativement par la chaîne Teensyduino / PlatformIO), le compilateur élimine la totalité du code mort à l'édition des liens. Les matrices de covariance $P, Q$ et les vecteurs d'état $\hat{x}$ sont instanciés à dimension fixe (ex. \lstinline|Eigen::Matrix<float, N, N>|), garantissant une allocation mémoire minimale et des performances d'exécution optimales.
+
+\subsection{Gestion Modulaire des Capteurs : Vol Nominal versus Banc d'Essai}
+
+\subsubsection{Masquage statique des périphériques}
+Certains équipements peuvent être déconnectés selon le profil de vol (par exemple, absence délibérée de récepteur GNSS en intérieur sous couverture UWB, ou absence temporaire du baromètre lors de tests inertiels purs). La modularité est assurée par un jeu de directives de préprocesseur dans \lstinline|HardwareConfig.h| :
+
+\begin{lstlisting}
+#define ENABLE_IMU_PRIMARY    1  // 1: BNO085 actif, 0: Desactive
+#define ENABLE_IMU_SECONDARY  1  // 1: CMPS12 actif (recalage cap), 0: Desactive
+#define ENABLE_BAROMETER      1  // 1: BMP581 actif
+#define ENABLE_GNSS           0  // 0: Desactive pour vol indoor
+#define ENABLE_UWB_BEACONS    1  // 1: Decawave DWM1001 actif
+#define ENABLE_SD_LOGGING     0  // 0: Vol nominal sans latence, 1: Seance de banc de test
+\end{lstlisting}
+
+\subsubsection{Stratégie à deux binaires compilés (Vol nominal vs Campagne de test)}
+L'enregistrement des séries temporelles sur support de stockage amovible (carte MicroSD native) est strictement réservé aux campagnes de caractérisation au sol et aux séances d'étalonnage. 
+
+En effet, l'écriture sur mémoire Flash NAND présente des latences sporadiques d'effacement de bloc pouvant dépasser $50\,\text{ms}$, ce qui est incompatible avec la cadence stricte de contrôle en vol nominal. Deux binaires de production distincts sont donc maintenus :
+\begin{enumerate}
+    \item \textbf{Firmware Nominal de Vol (\lstinline|ENABLE_SD_LOGGING = 0|) :}
+    Le pilote SDIO est totalement désactivé. La mémoire SRAM est allégée d'environ $64\,\text{Ko}$ de tampons DMA, éliminant toute latence parasite et assurant une marge de sécurité maximale.
+    \item \textbf{Firmware d'Instrumentation Banc d'Essai (\lstinline|ENABLE_SD_LOGGING = 1|) :}
+    Le pilote SDIO haute vitesse est activé avec un tampon circulaire en mémoire OCRAM (\lstinline|DMAMEM|). Ce mode permet d'enregistrer les données brutes à pleine cadence ($100 - 400\,\text{Hz}$) pour identifier empiriquement les matrices de bruit $R$ et $Q$ (protocole détaillé dans \textbf{\texttt{Formulations\_Kalman.pdf}}, Section 1.3).
+\end{enumerate}
+
+\subsubsection{Performance de la chaîne de compilation}
+L'adoption du masquage statique n'entraîne aucun ralentissement notable du cycle de développement. Sur la chaîne d'outils GCC ARM (\lstinline|arm-none-eabi-gcc 11.3+|) utilisée pour la Teensy 4.1 :
+\begin{itemize}
+    \item \textbf{Recompilation incrémentale} (modification de \lstinline|HardwareConfig.h|) : $3$ à $6$ secondes.
+    \item \textbf{Compilation complète à froid} (\textit{clean build}) incluant l'ensemble des bibliothèques matricielles : $15$ à $25$ secondes sur poste de développement standard.
+\end{itemize}
+Ce délai d'itération très court valide sans restriction la supériorité du masquage statique sur toute solution d'aiguillage dynamique.
+
+\subsection{Gestion de Capteurs Multiples et Redondance Matérielle}
+
+Lorsque plusieurs capteurs de même nature sont installés simultanément (par exemple, la centrale inertielle primaire BNO085 et le module secondaire CMPS12) :
+\begin{itemize}
+    \item \textbf{Mises à jour séquentielles indépendantes :}
+    Chaque capteur $i$ est traité comme une voie d'observation indépendante dans le filtre :
+    \begin{equation}
+        z_k^{(1)} = h^{(1)}(x_k) + v_k^{(1)}, \qquad z_k^{(2)} = h^{(2)}(x_k) + v_k^{(2)}
+    \end{equation}
+    Puisque les bruits de mesure $v_k^{(1)}$ et $v_k^{(2)}$ sont statistiquement décorrélés, chaque instrument déclenche sa propre mise à jour séquentielle de Kalman (scalaire ou vectorielle partielle). Cette approche assure une fusion optimale sans pré-filtrage arbitraire.
+    \item \textbf{Intégration géométrique des bras de levier :}
+    Si les deux instruments occupent des emplacements physiques distincts sur la nacelle, la fonction d'observation $h^{(i)}(x)$ intègre le vecteur de position relative $\mathbf{r}_i^b$ reliant le centre de gravité au capteur $i$, conformément aux lois de transport spatial établies en Section 2.2 de \textbf{\texttt{Formulations\_Kalman.pdf}}.
+\end{itemize}
+
+\end{document}

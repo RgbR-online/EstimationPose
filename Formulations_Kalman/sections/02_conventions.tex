@@ -1,0 +1,262 @@
+\documentclass[../Formulations_Kalman.tex]{subfiles}
+\begin{document}
+
+\section{Filtre de Kalman cinématique}
+
+\subsection{Introduction et Conventions}
+L'objectif est l'estimation de la position et de l'orientation d'un dirigeable en environnement 3D. Afin de rendre la formulation du filtre agnostique vis-à-vis du capteur de position absolue utilisé (UWB en intérieur ou GNSS/GPS en extérieur), on définit les repères suivants :
+\begin{itemize}
+    \item Le repère embarqué $\mathcal{R}_b$ lié à la structure rigide du dirigeable (\textit{Body}).
+    \item Le \textbf{repère de navigation global $\mathcal{R}_{\text{nav}}$} (repère galiléen local de travail du filtre) dans lequel on souhaite déterminer la position $(X, Y, Z)$ et l'attitude (angles d'Euler : Roulis $\phi$, Tangage $\theta$ et Lacet $\psi$) du véhicule :
+    \begin{itemize}
+        \item En intérieur : $\mathcal{R}_{\text{nav}} = \mathcal{R}_{\text{uwb}}$, défini par la géométrie du réseau d'ancres UWB fixées au sol.
+        \item En extérieur : $\mathcal{R}_{\text{nav}} = \mathcal{R}_{\text{enu}}$ (East-North-Up), repère cartésien local tangent à la Terre (axe $X$ vers l'Est, axe $Y$ vers le Nord géographique, axe $Z$ vertical local vers le haut), centré sur le point de décollage initial du dirigeable.
+    \end{itemize}
+    \item Le repère terrestre local $\mathcal{R}_{\text{earth}}$ lié au Nord magnétique, utilisé comme référence d'attitude par les magnétomètres de l'IMU.
+    \item Le repère propre du capteur inertiel $\mathcal{R}_{\text{imu}}$ associé aux axes physiques du module IMU.
+\end{itemize}
+
+\subsection{Deux formalismes de représentation de l'attitude : Angles d'Euler vs Quaternions}
+Pour décrire l'orientation tridimensionnelle du repère corps $\mathcal{R}_b$ par rapport au repère de navigation $\mathcal{R}_{\text{nav}}$, deux représentations mathématiques concurrentes sont envisagées : les angles d'Euler (Cardan/Tait-Bryan) et les quaternions unitaires.
+
+\subsubsection{Formulation par Angles d'Euler (Cardan $XYZ$)}
+L'attitude est paramétrée par le triplet minimal $\Omega = [\phi, \theta, \psi]^T$ représentant respectivement le roulis (\textit{Roll}), le tangage (\textit{Pitch}) et le lacet (\textit{Yaw}) selon une séquence de rotations intrinsèques autour des axes $X$, puis $Y$, puis $Z$.
+
+La matrice de rotation directionnelle $R_{b \to \text{nav}}(\Omega)$ s'exprime par :
+\begin{equation}
+R_{b \to \text{nav}}(\Omega) = \begin{bmatrix}
+\cos\psi\cos\theta & \cos\psi\sin\theta\sin\phi - \sin\psi\cos\phi & \cos\psi\sin\theta\cos\phi + \sin\psi\sin\phi \\
+\sin\psi\cos\theta & \sin\psi\sin\theta\sin\phi + \cos\psi\cos\phi & \sin\psi\sin\theta\cos\phi - \cos\psi\sin\phi \\
+-\sin\theta & \cos\theta\sin\phi & \cos\theta\cos\phi
+\end{bmatrix}
+\end{equation}
+
+La cinématique angulaire reliant les dérivées temporelles des angles d'Euler aux vitesses angulaires locales $\boldsymbol{\omega} = [p, q, r]^T$ mesurées par les gyromètres s'écrit via la matrice de passage $R_{c}(\Omega)$ :
+\begin{equation}
+\begin{bmatrix} \dot{\phi} \\ \dot{\theta} \\ \dot{\psi} \end{bmatrix} = R_{c}(\Omega) \begin{bmatrix} p \\ q \\ r \end{bmatrix} = 
+\begin{bmatrix} 
+1 & \sin(\phi)\tan(\theta) & \cos(\phi)\tan(\theta) \\ 
+0 & \cos(\phi) & -\sin(\phi) \\ 
+0 & \sin(\phi)/\cos(\theta) & \cos(\phi)/\cos(\theta) 
+\end{bmatrix}
+\begin{bmatrix} p \\ q \\ r \end{bmatrix}
+\end{equation}
+
+\textbf{Limites fondamentales de la formulation en angles d'Euler :}
+\begin{itemize}
+    \item \textbf{Singularité de représentation (Blocage de cardan / \textit{Gimbal lock}) :} Lorsque le tangage approche $\theta \to \pm 90^\circ$, $\cos(\theta) \to 0$ et $\tan(\theta) \to \pm \infty$. La matrice $R_c(\Omega)$ devient singulière et perd un degré de liberté. Bien que le couple de rappel aéro-statique naturel du dirigeable maintienne son assiette dans des plages modérées ($\pm 20^\circ$), cette singularité impose des non-linéarités sévères dans les dérivées Jacobiennes.
+    \item \textbf{Discontinuité modulo $2\pi$ du lacet :} L'angle de lacet $\psi$ est continu sur le cercle mais subit un saut de discontinuité de $360^\circ$ à $0^\circ$ lors des franchissements de cap. L'innovation de mesure $y_\psi = z_\psi - \hat{\psi}$ requiert obligatoirement un repliement angulaire (\textit{unwrapping}) : $y_\psi = \text{atan2}(\sin(z_\psi - \hat{\psi}), \cos(z_\psi - \hat{\psi}))$.
+\end{itemize}
+
+\subsubsection{Formulation par Quaternions unitaires ($\mathbb{H}_1$)}
+L'attitude est représentée par un quaternion unitaire hypercomplexe $q \in \mathbb{H}$ :
+\begin{equation}
+q = \begin{bmatrix} q_w \\ \mathbf{q}_v \end{bmatrix} = \begin{bmatrix} q_w \\ q_x \\ q_y \\ q_z \end{bmatrix}, \quad \text{avec la contrainte unitaire } \|q\|^2 = q_w^2 + q_x^2 + q_y^2 + q_z^2 = 1
+\end{equation}
+où $q_w$ désigne la partie scalaire et $\mathbf{q}_v = [q_x, q_y, q_z]^T$ la partie vectorielle.
+
+Le produit de deux quaternions (produit de Hamilton $\otimes$) s'exprime sans aucune fonction trigonométrique par :
+\begin{equation}
+p \otimes q = \begin{bmatrix} p_w q_w - \mathbf{p}_v \cdot \mathbf{q}_v \\ p_w \mathbf{q}_v + q_w \mathbf{p}_v + \mathbf{p}_v \times \mathbf{q}_v \end{bmatrix}
+\end{equation}
+
+La matrice de rotation $R(q)$ associée au quaternion unitaire s'évalue directement par calcul algébrique pur :
+\begin{equation}
+R(q) = (q_w^2 - \|\mathbf{q}_v\|^2) I_3 + 2 \mathbf{q}_v \mathbf{q}_v^T + 2 q_w [\mathbf{q}_v \times]
+\end{equation}
+où $[\mathbf{a}\times]$ désigne la matrice antisymétrique associée au produit vectoriel :
+\begin{equation}
+[\mathbf{a}\times] = \begin{bmatrix} 0 & -a_z & a_y \\ a_z & 0 & -a_x \\ -a_y & a_x & 0 \end{bmatrix}
+\end{equation}
+
+La cinématique différentielle continue est rigoureusement \textbf{bilinéaire et exempte de toute singularité} :
+\begin{equation}
+\dot{q} = \frac{1}{2} q \otimes \begin{bmatrix} 0 \\ \boldsymbol{\omega} \end{bmatrix} = \frac{1}{2} \Omega(\boldsymbol{\omega}) q, \quad \text{avec } \Omega(\boldsymbol{\omega}) = \begin{bmatrix} 0 & -p & -q & -r \\ p & 0 & r & -q \\ q & -r & 0 & p \\ r & q & -p & 0 \end{bmatrix}
+\end{equation}
+Sur un intervalle d'échantillonnage discret $dt$, l'intégration temporelle exacte à vitesse angulaire moyenne s'écrit :
+\begin{equation}
+q_{k+1} = q_k \otimes \Delta q_k, \quad \text{où } \Delta q_k = \begin{bmatrix} \cos\left(\frac{\|\boldsymbol{\omega}_k\| dt}{2}\right) \\ \frac{\boldsymbol{\omega}_k}{\|\boldsymbol{\omega}_k\|} \sin\left(\frac{\|\boldsymbol{\omega}_k\| dt}{2}\right) \end{bmatrix} \approx \begin{bmatrix} 1 \\ \frac{1}{2} \boldsymbol{\omega}_k dt \end{bmatrix}
+\end{equation}
+
+\subsubsection{Le paradigme de l'Error-State Kalman Filter (ESKF / MEKF)}
+L'insertion directe d'un quaternion 4D dans le vecteur d'état d'un EKF standard poserait une difficulté théorique majeure : la contrainte unitaire $\|q\|=1$ rend la matrice de covariance $4 \times 4$ associée singulière (de rang 3), ce qui entraîne une dérive numérique et une instabilité du filtre de Kalman.
+
+Pour surmonter rigoureusement cette limitation, on adopte le paradigme de l'\textbf{ESKF} (\textit{Error-State Kalman Filter}) :
+\begin{itemize}
+    \item L'\textbf{attitude nominale} $\hat{q}$ est un quaternion unitaire complet à 4 composantes, propagé fidèlement sur la variété $\mathbb{S}^3$ sans linéarisation par l'équation cinématique quaternionique.
+    \item L'\textbf{état d'erreur} $\delta\boldsymbol{\theta} \in \mathbb{R}^3$ est un vecteur minimal à 3 dimensions représentant un angle de rotation infinitésimal autour de l'attitude nominale :
+    \begin{equation}
+    q = \hat{q} \otimes \delta q(\delta\boldsymbol{\theta}) \approx \hat{q} \otimes \begin{bmatrix} 1 \\ \frac{1}{2} \delta\boldsymbol{\theta} \end{bmatrix}
+    \end{equation}
+    \item La matrice de covariance d'incertitude $P$ ne porte que sur le vecteur 3D minimal $\delta\boldsymbol{\theta}$. Elle est ainsi strictement définie positive, non-singulière et découplée.
+    \item À l'issue de chaque étape de correction par les capteurs, l'erreur angulaire estimée $\delta\hat{\boldsymbol{\theta}}$ est réinjectée dans l'attitude nominale :
+    \begin{equation}
+    \hat{q} \leftarrow \hat{q} \otimes \begin{bmatrix} 1 \\ \frac{1}{2} \delta\hat{\boldsymbol{\theta}} \end{bmatrix}, \quad \text{suivie de la normalisation } \hat{q} \leftarrow \frac{\hat{q}}{\|\hat{q}\|}
+    \end{equation}
+    puis l'état d'erreur est immédiatement remis à zéro ($\delta\hat{\boldsymbol{\theta}} \leftarrow 0$).
+\end{itemize}
+
+\subsubsection{Passerelles analytiques de conversion entre Euler et Quaternions}
+\begin{enumerate}
+    \item \textbf{Conversion Angles d'Euler $\to$ Quaternion unitaire (utilisée pour conditionner le CMPS12) :}
+    \begin{equation}
+    q = \begin{bmatrix}
+    \cos(\phi/2)\cos(\theta/2)\cos(\psi/2) + \sin(\phi/2)\sin(\theta/2)\sin(\psi/2) \\
+    \sin(\phi/2)\cos(\theta/2)\cos(\psi/2) - \cos(\phi/2)\sin(\theta/2)\sin(\psi/2) \\
+    \cos(\phi/2)\sin(\theta/2)\cos(\psi/2) + \sin(\phi/2)\cos(\theta/2)\sin(\psi/2) \\
+    \cos(\phi/2)\cos(\theta/2)\sin(\psi/2) - \sin(\phi/2)\sin(\theta/2)\cos(\psi/2)
+    \end{bmatrix}
+    \end{equation}
+    Cette conversion ne requiert que 3 calculs de sinus/cosinus et quelques multiplications élémentaires, s'exécutant en moins de $0.3\,\mu\text{s}$ sur le processeur Cortex-M7 de la Teensy 4.1.
+    
+    \item \textbf{Conversion Quaternion unitaire $\to$ Angles d'Euler (utilisée pour les lois de commande en aval) :}
+    \begin{align}
+    \phi &= \text{atan2}\left(2(q_w q_x + q_y q_z), \; 1 - 2(q_x^2 + q_y^2)\right) \\
+    \theta &= -\arcsin\left(2(q_w q_y - q_z q_x)\right) \\
+    \psi &= \text{atan2}\left(2(q_w q_z + q_x q_y), \; 1 - 2(q_y^2 + q_z^2)\right)
+    \end{align}
+\end{enumerate}
+
+\subsection{Conditionnement et pré-traitement des mesures en amont : UWB vs GNSS/GPS}
+Afin de préserver une matrice d'observation $H_{k+1}$ rigoureusement \textbf{linéaire, constante et découplée} dans l'ensemble des architectures du filtre (Situations 1, 2 et 3), toutes les conversions non-linéaires de repères, recalages d'attitude et compensations géométriques de bras de levier sont systématiquement déportées \textbf{en amont} de l'étape de mise à jour du filtre de Kalman.
+
+Cette étape de conditionnement fournit au filtre un vecteur de mesure centralisé $z_{k+1}$ exprimé au centre de masse du dirigeable et projeté nativement dans le repère de navigation commun $\mathcal{R}_{\text{nav}}$.
+
+\subsubsection{Tableau comparatif synthétique du conditionnement}
+Le tableau~\ref{tab:comparaison_capteurs} récapitule la chaîne de traitement et les caractéristiques comparées des deux capteurs de position absolue mutuellement exclusifs.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{p{4.2cm} p{5.0cm} p{5.5cm}}
+\toprule
+\textbf{Caractéristique} & \textbf{Mode Intérieur : UWB (DWM1001-DEV)} & \textbf{Mode Extérieur : GNSS/GPS (PA1010D)} \\
+\midrule
+\textbf{Mesure spatiale brute} & Coordonnées relatives $[X_{\text{uwb}}, Y_{\text{uwb}}, Z_{\text{uwb}}]^T$ & Coordonnées WGS84 $(\varphi, \lambda, h)$ (degrés, m) \\
+\textbf{Repère natif} & Repère local des ancres $\mathcal{R}_{\text{uwb}}$ & Ellipsoïde terrestre global (WGS84) \\
+\textbf{Transformation spatiale} & Identité (déjà métrique et cartésien) & Projection plane tangente locale WGS84 $\to$ ENU \\
+\textbf{Alignement d'attitude ($R_{\text{earth} \to \text{nav}}$)} & Offset d'ancres $\Delta\psi_{\text{uwb}}$ par rapport au Nord magnétique & Rotation de déclinaison magnétique locale $\Delta\psi_{\text{mag}}$ \\
+\textbf{Précision nominale horizontale} & $\pm 10\text{ cm}$ à courte portée & $\approx \pm 2.5\text{ m}$ (CEP 50\%) \\
+\textbf{Facteur d'anisotropie verticale} & Dégradation géométrique par ancres coplanaires ($k_z > 1$) & Géométrie satellitaire haute ($\text{VDOP} \approx 1.5 \text{ à } 2 \times \text{HDOP}$) \\
+\textbf{Dynamique de variance ($R_{k+1}$)} & $\sigma_{xy}^2 = \sigma_{\text{nom},xy}^2 / C_k$ \newline $\sigma_{z}^2 = (k_z \sigma_{\text{nom},xy})^2 / C_k$ & $\sigma_{xy}^2 = (\text{HDOP} \cdot \sigma_{0,\text{gps}})^2$ \newline $\sigma_{z}^2 = (\text{VDOP} \cdot \sigma_{0,\text{gps}})^2$ \\
+\textbf{Indicateur de santé / coupure} & Indice de confiance radio $C_k \in ]0, 1]$ & Nombre de satellites fixés et DOP NMEA \\
+\textbf{Mesure de vitesse optionnelle} & Non disponible & Vitesses Doppler cartésiennes $(V_E, V_N)$ \\
+\bottomrule
+\end{tabular}
+\caption{Synthèse comparative du conditionnement en amont entre les modes UWB et GPS.}
+\label{tab:comparaison_capteurs}
+\end{table}
+
+\subsubsection{Projection spatiale vers le repère de navigation $\mathcal{R}_{\text{nav}}$}
+Le vecteur de position absolue $[X_{\text{pos}}, Y_{\text{pos}}, Z_{\text{pos}}]^T$ alimentant le filtre est préparé selon le mode opérationnel :
+\begin{enumerate}
+    \item \textbf{Mode Intérieur (UWB) :} Le réseau d'ancres définit directement une base orthonormée locale $\mathcal{R}_{\text{nav}} = \mathcal{R}_{\text{uwb}}$. Aucune transformation spatiale n'est requise :
+    \begin{equation}
+    \begin{bmatrix} X_{\text{pos}} \\ Y_{\text{pos}} \\ Z_{\text{pos}} \end{bmatrix}_{\text{brut}} = \begin{bmatrix} X_{\text{uwb}} \\ Y_{\text{uwb}} \\ Z_{\text{uwb}} \end{bmatrix}
+    \end{equation}
+    \item \textbf{Mode Extérieur (GPS) :} Le récepteur délivre la latitude $\varphi$, la longitude $\lambda$ et l'altitude ellipsoïdale $h$. Ces grandeurs sont converties en coordonnées cartésiennes $\mathcal{R}_{\text{nav}} = \mathcal{R}_{\text{enu}}$ par projection plane tangente locale centrée sur le point de mise sous tension/décollage $(\varphi_0, \lambda_0, h_0)$ :
+    \begin{equation}
+    \begin{bmatrix} X_{\text{pos}} \\ Y_{\text{pos}} \\ Z_{\text{pos}} \end{bmatrix}_{\text{brut}} = \begin{bmatrix} X_{\text{enu}} \\ Y_{\text{enu}} \\ Z_{\text{enu}} \end{bmatrix} \approx \begin{bmatrix} (R_0 + h_0) \cos\varphi_0 \cdot (\lambda - \lambda_0) \\ (R_0 + h_0) \cdot (\varphi - \varphi_0) \\ h - h_0 \end{bmatrix}
+    \end{equation}
+    où $R_0 \approx 6\,371\,000\text{ m}$ désigne le rayon terrestre moyen.
+\end{enumerate}
+
+\subsubsection{Alignement de l'attitude et recalage multi-repères}
+L'attitude brute délivrée par la centrale inertielle (CMPS12 ou BNO085) exprime l'orientation de ses axes physiques par rapport au Nord magnétique terrestre ($\mathcal{R}_{\text{earth}}$). Pour que le filtre fonctionne de manière cohérente dans $\mathcal{R}_{\text{nav}}$, deux corrections d'attitude sont appliquées :
+\begin{itemize}
+    \item $R_{\text{imu} \to \text{body}}$ : correction du défaut d'alignement mécanique entre la puce IMU et le châssis du dirigeable.
+    \item $R_{\text{earth} \to \text{nav}}$ : alignement du repère magnétique sur le repère de navigation :
+    \begin{itemize}
+        \item En intérieur ($\mathcal{R}_{\text{nav}} = \mathcal{R}_{\text{uwb}}$) : rotation fixe d'angle $\Delta\psi_{\text{uwb}}$ compensant l'orientation des ancres par rapport au Nord magnétique.
+        \item En extérieur ($\mathcal{R}_{\text{nav}} = \mathcal{R}_{\text{enu}}$) : rotation d'angle $\Delta\psi_{\text{mag}}$ autour de la verticale correspondant à la \textbf{déclinaison magnétique locale} connue sur le site d'évolution, recalant le Nord magnétique sur le Nord géographique.
+    \end{itemize}
+\end{itemize}
+L'orientation dynamique du dirigeable par rapport à $\mathcal{R}_{\text{nav}}$ est alors rigoureusement obtenue :
+\begin{itemize}
+    \item \textbf{Sous forme matricielle :}
+    \begin{equation}
+    R_{b \to \text{nav}} = R_{\text{earth} \to \text{nav}} \cdot R_{\text{imu} \to \text{earth}} \cdot R_{\text{imu} \to \text{body}}^T
+    \end{equation}
+    Les angles d'Euler recalés $(\phi_k, \theta_k, \psi_k)$ injectés dans le filtre en formulation Euler sont extraits analytiquement :
+    \begin{align}
+    \theta_k &= -\arcsin\left(R_{b \to \text{nav}}[2][0]\right) \\
+    \phi_k &= \text{atan2}\left(R_{b \to \text{nav}}[2][1], \; R_{b \to \text{nav}}[2][2]\right) \\
+    \psi_k &= \text{atan2}\left(R_{b \to \text{nav}}[1][0], \; R_{b \to \text{nav}}[0][0]\right)
+    \end{align}
+    \item \textbf{Sous forme quaternionique (directe sans trigonométrie) :}
+    \begin{equation}
+    q_{b \to \text{nav}} = q_{\text{earth} \to \text{nav}} \otimes q_{\text{imu} \to \text{earth}} \otimes q_{\text{imu} \to \text{body}}^*
+    \end{equation}
+    où $q^*$ désigne le conjugué du quaternion unitaire ($q^* = [q_w, -\mathbf{q}_v]^T$). Cette formulation est exploitée directement avec l'Adafruit BNO085 ou après conversion amont du CMPS12.
+\end{itemize}
+
+\subsubsection{Compensation des bras de levier spatiaux au centre de masse}
+Les différents capteurs physiques ne peuvent pas être tous implantés exactement au centre de gravité $G$ du dirigeable. Selon leur nature physique (translationnelle, rotationnelle, inertielle ou magnétique), l'effet d'excentrement se traite de façon rigoureusement différenciée :
+
+\paragraph{1. Capteurs ponctuels de position absolue (UWB, GNSS/GPS, Baromètre) :}
+Pour un capteur fournissant une mesure spatiale de translation, ses coordonnées brutes sont ramenées virtuellement au centre de gravité du dirigeable à chaque pas temporel en utilisant la matrice d'orientation instantanée $R_{b \to \text{nav}}(\Omega_k)$ :
+\begin{align}
+\begin{bmatrix} X_{\text{pos}} \\ Y_{\text{pos}} \\ Z_{\text{pos}} \end{bmatrix}_{\text{corrigé}} &= \begin{bmatrix} X_{\text{pos}} \\ Y_{\text{pos}} \\ Z_{\text{pos}} \end{bmatrix}_{\text{brut}} - R_{b \to \text{nav}}(\Omega_k) \cdot \mathbf{r}_{\text{pos}}^b \\
+Z_{\text{baro, corrigé}} &= Z_{\text{baro, brut}} - \begin{bmatrix} 0 & 0 & 1 \end{bmatrix} R_{b \to \text{nav}}(\Omega_k) \cdot \mathbf{r}_{\text{baro}}^b
+\end{align}
+où $\mathbf{r}_{\text{pos}}^b = \vec{GS}_{\text{pos}}$ et $\mathbf{r}_{\text{baro}}^b = \vec{GS}_{\text{baro}}$ désignent les coordonnées spatiales de l'antenne (UWB/GPS) et de la prise barométrique dans le repère corps $\mathcal{R}_b$.
+
+\paragraph{2. Bras de levier cinématique complet sur l'accéléromètre (Solide indéformable) :}
+Considérons une centrale inertielle dont le bloc MEMS accélérométrique est situé au point $S_{\text{imu}}$, distant du centre de masse $G$ du vecteur $\mathbf{r}_{\text{imu}}^b = \vec{GS}_{\text{imu}}$. D'après la loi de composition des mouvements pour un solide indéformable (formule de Bour), le champ des vitesses s'écrit $\vec{V}(S) = \vec{V}(G) + \boldsymbol{\omega} \times \mathbf{r}_{\text{imu}}^b$. En dérivant cette relation par rapport au temps dans le repère galiléen et en la projetant dans le repère corps, l'accélération au capteur s'exprime rigoureusement par :
+\begin{equation}
+\mathbf{a}_{\text{imu}}^b = \mathbf{a}_G^b + \underbrace{\dot{\boldsymbol{\omega}} \times \mathbf{r}_{\text{imu}}^b}_{\text{Accélération tangentielle}} + \underbrace{\boldsymbol{\omega} \times (\boldsymbol{\omega} \times \mathbf{r}_{\text{imu}}^b)}_{\text{Accélération centripète}}
+\end{equation}
+où $\mathbf{a}_G^b$ est l'accélération propre au centre de gravité recherchée par les modèles dynamiques du filtre (Situations 2 et 3), $\boldsymbol{\omega} = [p, q, r]^T$ est le vecteur rotation instantané et $\dot{\boldsymbol{\omega}}$ l'accélération angulaire.
+Le terme centripète peut également s'écrire sous forme matricielle creuse : $[\boldsymbol{\omega}_\times]^2 \mathbf{r}_{\text{imu}}^b$, où $[\boldsymbol{\omega}_\times]$ est la matrice antisymétrique associée au produit vectoriel.
+
+\textbf{Analyse quantitative des ordres de grandeur et critères d'omission pour le dirigeable :} \\
+En vol stationnaire ou manœuvré, en raison de son volume imposant et de sa forte traînée aérodynamique, le dirigeable possède une dynamique angulaire lente :
+\begin{equation}
+\|\boldsymbol{\omega}\| \le 0.5\,\text{rad/s} \quad (\approx 28.6^\circ/\text{s}), \qquad \|\dot{\boldsymbol{\omega}}\| \le 0.8\,\text{rad/s}^2
+\end{equation}
+Si la carte IMU est implantée sur la carte principale dans la nacelle à proximité du centre de gravité ($\|\mathbf{r}_{\text{imu}}^b\| \le 0.15\,\text{m}$) :
+\begin{align}
+\|\dot{\boldsymbol{\omega}} \times \mathbf{r}_{\text{imu}}^b\| &\le 0.8 \times 0.15 = 0.12\,\text{m/s}^2 \\
+\|\boldsymbol{\omega} \times (\boldsymbol{\omega} \times \mathbf{r}_{\text{imu}}^b)\| &\le (0.5)^2 \times 0.15 \approx 0.038\,\text{m/s}^2
+\end{align}
+Sachant que le plancher de bruit RMS d'un accéléromètre MEMS en vol (incluant le bruit de transmission et les vibrations résiduelles) est compris entre $0.05\,\text{m/s}^2$ et $0.15\,\text{m/s}^2$, \textbf{l'erreur induite par l'omission du bras de levier accélérométrique reste du même ordre de grandeur que le bruit intrinsèque du capteur lorsque $r \le 15\,\text{cm}$}.
+
+En revanche, si l'IMU est déportée (par exemple à l'extrémité de la nacelle ou sur un empennage, $\|\mathbf{r}_{\text{imu}}^b\| > 0.5\,\text{m}$), l'accélération tangentielle dépasse $0.4\,\text{m/s}^2$, ce qui dégraderait significativement l'estimation. Dans ce cas, une compensation cinématique en amont doit être appliquée :
+\begin{equation}
+\mathbf{a}_{G,\text{corrigé}}^b = \mathbf{a}_{\text{imu, brut}}^b - \dot{\boldsymbol{\omega}} \times \mathbf{r}_{\text{imu}}^b - \boldsymbol{\omega} \times (\boldsymbol{\omega} \times \mathbf{r}_{\text{imu}}^b)
+\end{equation}
+où l'accélération angulaire $\dot{\boldsymbol{\omega}}$ peut être estimée numériquement par différence finie filtrée : $\dot{\boldsymbol{\omega}}_k \approx \frac{\boldsymbol{\omega}_k - \boldsymbol{\omega}_{k-1}}{dt}$.
+
+\paragraph{3. Invariance spatiale du Gyromètre et du Magnétomètre :}
+\begin{itemize}
+    \item \textbf{Vitesse angulaire instantanée (Gyromètre) :} En mécanique du solide rigide, le vecteur rotation instantané $\boldsymbol{\omega}$ est un champ équiprojectif uniforme : $\boldsymbol{\omega}_A = \boldsymbol{\omega}_B$ pour tous points $A$ et $B$ du solide. Il n'existe \textbf{aucun effet de bras de levier sur la mesure gyrométrique}. Son positionnement géométrique sur le dirigeable est totalement indifférent vis-à-vis de la cinématique.
+    \item \textbf{Champ magnétique (Magnétomètre / Boussole) :} Le champ géomagnétique terrestre étant rigoureusement homogène à l'échelle décamétrique, la translation spatiale n'engendre aucune distorsion de mesure. En revanche, si le magnétomètre est déporté sur un mât pour fuir les champs électromagnétiques induits par les forts courants des moteurs brushless, son trièdre mécanique peut être désaligné du trièdre corps, imposant d'appliquer une matrice d'orientation fixe $R_{\text{mag}}^{\text{body}}$ :
+    \begin{equation}
+    \mathbf{B}^b = R_{\text{mag}}^{\text{body}} \cdot \mathbf{B}_{\text{capteur}}
+    \end{equation}
+\end{itemize}
+
+\subsubsection{Conditionnement stochastique dynamique de la matrice $R_{k+1}$}
+Les termes diagonaux de variance $(\sigma_{X,\text{pos}}^2, \sigma_{Y,\text{pos}}^2, \sigma_{Z,\text{pos}}^2)$ de la matrice de bruit de mesure $R_{k+1}$ sont actualisés dynamiquement en temps réel selon la qualité instantanée des signaux :
+\begin{enumerate}
+    \item \textbf{Loi UWB (Intérieur) :} L'indice de confiance radio $C_k \in ]0, 1]$ et le coefficient de dégradation verticale d'anisotropie $k_z > 1$ (induit par la quasi-coplanarité des ancres) modulent la variance nominale :
+    \begin{equation}
+    \sigma_{X,\text{pos}}^2 = \sigma_{Y,\text{pos}}^2 = \frac{\sigma_{\text{nom},xy}^2}{C_k}, \quad \sigma_{Z,\text{pos}}^2 = \frac{(k_z \cdot \sigma_{\text{nom},xy})^2}{C_k}
+    \end{equation}
+    En cas de décrochage ou de masque radio ($C_k \to 0$), les variances tendent vers l'infini, ordonnant mathématiquement au filtre d'ignorer la mesure UWB.
+    
+    \item \textbf{Loi GNSS/GPS (Extérieur) :} Les indicateurs géométriques HDOP (\textit{Horizontal Dilution of Precision}) et VDOP (\textit{Vertical Dilution of Precision}) extraits de la trame NMEA pondèrent l'erreur de base $\sigma_{0,\text{gps}} \approx 2.5\text{ m}$ :
+    \begin{equation}
+    \sigma_{X,\text{pos}}^2 = \sigma_{Y,\text{pos}}^2 = (\text{HDOP} \cdot \sigma_{0,\text{gps}})^2, \quad \sigma_{Z,\text{pos}}^2 = (\text{VDOP} \cdot \sigma_{0,\text{gps}})^2
+    \end{equation}
+    Comme l'ensemble de la constellation satellitaire se situe au-dessus de l'horizon, la précision altimétrique est structurellement dégradée ($\text{VDOP} \approx 1.5 \text{ à } 2 \times \text{HDOP}$).
+\end{enumerate}
+
+\textbf{Complémentarité fondamentale avec le baromètre :} \\
+Dans les deux configurations, la dispersion géométrique verticale est systématiquement plus dégradée que la dispersion horizontale. Cette propriété universelle contraint le filtre à s'appuyer principalement sur la haute résolution relative du capteur barométrique (ex. BMP581) pour estimer la dynamique fine de l'altitude $Z$, tout en utilisant $Z_{\text{pos}}$ comme ancre absolue basse fréquence exempte de dérive.
+
+\textbf{Justification de la structure diagonale de $R_{k+1}$ :} \\
+Bien que la projection par bras de levier $R_{b \to \text{nav}}(\Omega_k) \cdot \mathbf{r}_{\text{pos}}^b$ couple stochastiquement l'attitude et la position, l'écart induit ($\approx \|\mathbf{r}_{\text{pos}}^b\| \sin(2^\circ) \approx 7\text{ mm}$) est inférieur à $10\%$ du bruit nominal UWB ($\pm 10\text{ cm}$) et totalement négligeable devant l'incertitude GPS ($\pm 2.5\text{ m}$). L'hypothèse de découplage et la forme strictement diagonale de $R_{k+1}$ sont donc parfaitement vérifiées en pratique.
+
+\end{document}
+

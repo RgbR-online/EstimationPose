@@ -1,0 +1,162 @@
+\documentclass[../Implementation.tex]{subfiles}
+\begin{document}
+
+\section{Temps Réel, Ordonnancement et Optimisations Cortex-M7}
+
+\subsection{Stratégie de Fusion Asynchrone Événementielle}
+
+Dans la chaîne de navigation du dirigeable autonome, les fréquences d'échantillonnage des différents capteurs sont fondamentalement disparates :
+\begin{itemize}
+    \item Centrale inertielle primaire (BNO085) : $100\text{ à }200\text{ Hz}$ (voire $400\text{ Hz}$ en mode SHTP).
+    \item Centrale inertielle secondaire / Boussole (CMPS12) : $20\text{ à }50\text{ Hz}$.
+    \item Baromètre / Altimètre numérique (BMP581) : $25\text{ à }50\text{ Hz}$.
+    \item Système de positionnement absolu UWB (Decawave DWM1001) : $10\text{ Hz}$.
+    \item Récepteur satellitaire GNSS (PA1616S) : $1\text{ à }10\text{ Hz}$ ($5\text{ Hz}$ nominal en mode SBAS).
+\end{itemize}
+
+Face à cette hétérogénéité temporelle, trois stratégies architecturales peuvent être envisagées :
+
+\subsubsection{Stratégie A : Correction synchrone globale (Proscrite)}
+Cette approche consiste à attendre qu'un vecteur de mesure complet $z \in \mathbb{R}^{13}$ soit constitué avant d'exécuter la phase de correction. Si une composante est absente, deux solutions dégradées se présentent :
+\begin{itemize}
+    \item \textit{Remplacer la composante manquante par sa prédiction :} Cette pratique viole les fondements du filtrage stochastique en réinjectant l'estimation dans l'observation, ce qui sous-estime artificiellement la covariance $P$ et provoque une divergence rapide du filtre.
+    \item \textit{Bloquer le calcul dans l'attente du capteur le plus lent :} Cette méthode abaisse la fréquence de rafraîchissement globale à celle du capteur le plus lent ($1\text{ à }5\,\text{Hz}$), introduisant un retard inacceptable pour la stabilisation en vol.
+\end{itemize}
+
+\subsubsection{Stratégie B : Synchronisation par paquets et mémoires tampons (Déconseillée)}
+L'agrégation des mesures au sein d'une fenêtre temporelle glissante engendre :
+\begin{itemize}
+    \item Une gigue temporelle (\textit{jitter}) difficilement quantifiable sur les fronts de mise à jour.
+    \item Une latence algorithmique systématique dégradant la réactivité des lois de commande moteur.
+    \item Une surcharge de synchronisation logicielle (sémaphores, tampons de partage) sur le microcontrôleur.
+\end{itemize}
+
+\subsubsection{Stratégie C : Prédiction Haute Fréquence et Mises à Jour Asynchrones (Standard retenu)}
+La méthode optimale en ingénierie aérospatiale repose sur le \textbf{découplage strict entre la propagation d'état et les corrections séquentielles événementielles} :
+
+\begin{enumerate}
+    \item \textbf{Boucle de Prédiction Haute Fréquence (Cadencement continu) :}
+    Exécutée à la fréquence maximale de l'IMU (ou cadencée à $100 - 200\,\text{Hz}$ par un timer matériel \lstinline|IntervalTimer| de la Teensy 4.1). L'état estimé $\hat{x}$ et son incertitude $P$ sont propagés à chaque pas temporel $\Delta t$ calculé par le compteur de cycles DWT :
+    \begin{align}
+        \hat{x}_{k+1\mid k} &= f(\hat{x}_{k\mid k}, u_k, \Delta t) \\
+        P_{k+1\mid k} &= F_k P_{k\mid k} F_k^T + Q_k(\Delta t)
+    \end{align}
+    
+    \item \textbf{Mises à Jour Partielles Asynchrones (Déclenchées par événement) :}
+    Dès qu'un périphérique émet un échantillon valide (par exemple le baromètre à $30\,\text{Hz}$), une routine de mise à jour dédiée à \textbf{cette sous-mesure uniquement} est instantanément appelée :
+    \begin{align}
+        y_{baro} &= z_{baro} - h_{baro}(\hat{x}) \\
+        S_{baro} &= H_{baro} P H_{baro}^T + R_{baro} \\
+        K_{baro} &= P H_{baro}^T S_{baro}^{-1} \\
+        \hat{x} &\leftarrow \hat{x} + K_{baro} y_{baro} \\
+        P &\leftarrow (I - K_{baro} H_{baro}) P \quad \text{(ou forme de Joseph)}
+    \end{align}
+    Puisque la mesure barométrique est scalaire ($m=1$), l'inversion matricielle $S^{-1}$ se résume à une division flottante élémentaire exécutée en moins de $0.05\,\mu\text{s}$ sur la FPU de la Teensy 4.1.
+\end{enumerate}
+
+\subsection{Architecture Temporelle et Hiérarchie des Priorités NVIC}
+
+Le microcontrôleur PJRC Teensy 4.1 centralise simultanément l'acquisition des capteurs, la prédiction et correction de Kalman, l'asservissement des moteurs brushless et la transmission télémétrique. Pour éviter qu'un traitement lourd ne retarde l'échantillonnage de vol, les priorités d'interruption du contrôleur vectorisé (NVIC) sont rigoureusement ordonnancées :
+
+\begin{enumerate}
+    \item \textbf{Priorité 1 (Critique / Priorité 32) — Interruption d'Horodatage IMU :}
+    La ligne d'alerte \lstinline|H_INTN| de l'Adafruit BNO085 déclenche immédiatement une interruption externe pour capturer le compteur de cycles haute résolution (\lstinline|ARM_DWT_CYCCNT|) à l'instant exact de l'émission physique de la trame.
+    
+    \item \textbf{Priorité 2 (Haute / Priorité 64) — Boucle de Contrôle Moteur et Prédiction EKF :}
+    Exécutée sous interruption matérielle périodique (\lstinline|IntervalTimer| adossé au bloc PIT). La génération des signaux PWM vers les variateurs électroniques (ESC) et les servomoteurs d'empennage est cadencée sans la moindre gigue logicielle.
+    
+    \item \textbf{Priorité 3 (Moyenne / Priorité 128) — Routines de Correction Asynchrone :}
+    Dépouillement des trames I2C (baromètre, magnétomètre) et UART (réception des distances ToF UWB et des coordonnées GNSS).
+    
+    \item \textbf{Priorité 4 (Basse / Priorités 192 à 224) — Télémétrie Sol et Logging SD :}
+    Les transferts vers la carte MicroSD (actifs uniquement en mode banc d'essai) et l'émission radio sol sont traités en arrière-plan par DMA, sans bloquer la boucle principale.
+\end{enumerate}
+
+\subsection{Exploitation Maximale du Microcontrôleur Teensy 4.1}
+
+Les spécifications matérielles complètes du processeur NXP i.MXRT1062 sont détaillées dans le document \textbf{\texttt{Materiel.pdf}} (Section 5). Les choix d'implémentation logicielle tirent pleinement parti de cette architecture :
+
+\begin{itemize}
+    \item \textbf{Maintien de la cadence maximale à 600 MHz :}
+    La consommation électrique du calculateur sous $600\,\text{MHz}$ est d'environ $0.33\,\text{W}$ ($100\,\text{mA}$ sous $3.3\,\text{V}$), ce qui représente moins de $0.5\%$ de la puissance absorbée par la chaîne de propulsion ($20\text{ à }150\,\text{W}$). Le processeur est donc maintenu en permanence à sa cadence maximale sans sous-cadencement, assurant un temps de réponse déterministe et une marge de calcul maximale.
+    
+    \item \textbf{Chronométrage Nanoseconde sans Overhead :}
+    La mesure de l'intervalle temporel $\Delta t$ est réalisée en lisant directement le registre 32 bits du compteur de cycles matériel DWT, sans passer par l'appel système \lstinline|micros()| :
+\begin{lstlisting}
+uint32_t t_now = ARM_DWT_CYCCNT; // Registre DWT cadance a 600 MHz (1 cycle)
+float dt = (t_now - t_prev) * (1.0f / 600000000.0f); // Resolution 1.667 ns
+t_prev = t_now;
+\end{lstlisting}
+
+    \item \textbf{Placement Mémoire Déterministe (TCM vs OCRAM) :}
+    \begin{itemize}
+        \item Les vecteurs d'état $\hat{x}$, matrices de covariance $P$ et tampons de calcul matriciel de l'EKF sont alloués en \textbf{DTCM} (\textit{Data Tightly-Coupled Memory}, $512\,\text{Ko}$), garantissant un accès CPU à $600\,\text{MHz}$ avec \textbf{zéro cycle d'attente}.
+        \item En application de la règle matérielle documentée dans \textbf{\texttt{Materiel.pdf}}, les tampons de communication DMA (trames UWB et paquets SDIO) sont alloués en \textbf{OCRAM} via l'attribut \lstinline|DMAMEM|.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Budget Temporel et Profilage sur Cortex-M7 à 600 MHz}
+
+Grâce à la décomposition en mises à jour séquentielles univariées ou de faible dimension ($m \le 3$), le coût computationnel global demeure une fraction négligeable du budget temps alloué par la boucle de commande :
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Phase d'estimation} & \textbf{Fréquence d'exécution} & \textbf{Dimension mise à jour} & \textbf{Temps d'exécution mesuré} \\
+\midrule
+Propagation d'état IMU & $100 - 200\text{ Hz}$ & État complet ($n=15\text{ ou }16$) & $\approx 12 - 25\,\mu\text{s}$ \\
+Correction Barométrique & $25 - 50\text{ Hz}$ & Scalaire ($m=1$) & $\approx 1.5 - 3\,\mu\text{s}$ \\
+Correction Boussole (Cap $\psi$) & $20 - 40\text{ Hz}$ & Scalaire ($m=1$) & $\approx 2 - 4\,\mu\text{s}$ \\
+Correction UWB 3D & $10\text{ Hz}$ & Vecteur cartésien ($m=3$) & $\approx 8 - 14\,\mu\text{s}$ \\
+Correction GNSS (Position / Vitesse) & $5 - 10\text{ Hz}$ & Vecteur ($m=3\text{ ou }5$) & $\approx 10 - 18\,\mu\text{s}$ \\
+\bottomrule
+\end{tabular}
+\caption{Budget temporel des différentes phases du filtre profilé sur Teensy 4.1 via DWT.}
+\label{tab:budget_temporel_teensy}
+\end{table}
+
+À une période de boucle nominale de $10\,\text{ms}$ ($100\,\text{Hz}$), la charge totale de calcul consacrée à l'observateur reste inférieure à \textbf{$4\%$ du temps CPU disponible}, laissant plus de $96\%$ de marge pour l'asservissement des moteurs, la navigation et la télémétrie.
+
+\subsection{Précision Numérique : Frontière entre Théorie et Génie Logiciel}
+
+\subsubsection{Délimitation stricte des domaines de responsabilité}
+Une distinction méthodologique claire est établie entre les démonstrations théoriques et les contraintes de réalisation logicielle :
+
+\begin{itemize}
+    \item \textbf{Ce qui relève de \texttt{Formulations\_Kalman.pdf} (Cadre mathématique formel) :}
+    \begin{enumerate}
+        \item La géométrie différentielle du groupe de Lie $SO(3)$ et de la variété $\mathbb{S}^3$.
+        \item La formulation ESKF (projection de l'incertitude dans l'espace tangent minimal $\delta\boldsymbol{\theta} \in \mathfrak{so}(3) \cong \mathbb{R}^3$).
+        \item La dérivation formelle de la forme stabilisée de Joseph garantissant $P \succeq 0$ de manière inconditionnelle (\textbf{Annexe A.1 de \texttt{Formulations\_Kalman.pdf}}).
+        \item Le théorème de projection orthogonale de Frobenius prouvant que la symétrisation $P \leftarrow \frac{P+P^T}{2}$ est le projecteur optimal au sens des moindres carrés (\textbf{Annexe A.2 de \texttt{Formulations\_Kalman.pdf}}).
+    \end{enumerate}
+
+    \item \textbf{Ce qui relève du présent document \texttt{Implementation.pdf} (Génie logiciel et arithmétique finie) :}
+    \begin{enumerate}
+        \item \textit{Arithmétique IEEE 754 simple précision (\lstinline|float|) :} En arithmétique flottante 32 bits, les erreurs d'arrondi soustractives dégradent la symétrie de $P$. Ce phénomène est un artefact d'ordinateur et non un défaut de modélisation stochastique.
+        \item \textit{Arbitrage de coût de calcul embarqué :} La forme de Joseph complète exige deux multiplications matricielles complètes de dimension $N \times N$, multipliant par 3 le temps de calcul de la correction. Sur microcontrôleur embarqué, on lui associe ou on lui préfère la symétrisation rapide $P \leftarrow \frac{P+P^T}{2}$, dont le coût est quasi-nul ($O(N^2/2)$ additions).
+        \item \textit{Instructions FPU matérielles :} Exploitation de l'instruction assembleur \lstinline|VSQRT.F32| du Cortex-M7 pour renormaliser le quaternion d'attitude en seulement 14 cycles ($23\,\text{ns}$).
+        \item \textit{Gestion des singularités numériques :} Traitement préventif évitant toute division par zéro si un capteur fournit un quaternion dégénéré ($\|q\| < 10^{-6}$).
+    \end{enumerate}
+\end{itemize}
+
+\subsubsection{Règles d'implémentation opérationnelles}
+Pour conjuguer rigueur stochastique et efficacité d'exécution sur le processeur Cortex-M7 :
+\begin{enumerate}
+    \item \textbf{Renormalisation systématique du quaternion :}
+    Exécutée à la fin de chaque étape de propagation cinématique :
+    \begin{equation}
+        q \leftarrow \frac{q}{\sqrt{q_w^2 + q_x^2 + q_y^2 + q_z^2}}
+    \end{equation}
+    avec test de garde : si $\|q\| < 10^{-6}$, le quaternion est réinitialisé à l'identité $[1, 0, 0, 0]^T$.
+    \item \textbf{Symétrisation matricielle inconditionnelle :}
+    Exécutée immédiatement après chaque mise à jour de mesure :
+    \begin{equation}
+        P \leftarrow \frac{P + P^T}{2}
+    \end{equation}
+    Cette routine compacte préserve l'intégrité spectrale de la covariance sur des durées de vol prolongées sans pénaliser la charge CPU.
+\end{enumerate}
+
+\end{document}

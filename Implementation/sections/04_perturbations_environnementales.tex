@@ -1,0 +1,46 @@
+\documentclass[../Implementation.tex]{subfiles}
+\begin{document}
+
+\section{Perturbations Environnementales et Filtrage Physique}
+
+\subsection{Filtrage Passe-Bas Matériel et Justification de la Coupure à 40 Hz}
+
+Les centrales inertielles (BNO085 et BNO055) et le baromètre (BMP581) intègrent des filtres numériques programmables (IIR et passe-bas). Une fréquence de coupure globale calibrée à \textbf{$40\,\text{Hz}$} est préconisée pour trois motifs physiques :
+\begin{enumerate}
+    \item \textbf{Dynamique propre du dirigeable :} Les oscillations pendulaires naturelles et les modes de tangage de l'aéronef évoluent à très basse fréquence ($f < 1.5\,\text{Hz}$). Un filtre passe-bas à $40\,\text{Hz}$ n'introduit qu'un déphasage minime ($< 4\,\text{ms}$) sur la chaîne d'asservissement.
+    \item \textbf{Bruit vibratoire hélicoïdal :} Les propulseurs brushless tournent à des vitesses usuelles comprises entre 3\,000 et 6\,000 tr/min. Avec des hélices bi-pales ou tri-pales, la fréquence fondamentale de passage des pales se situe entre $100\,\text{Hz}$ et $300\,\text{Hz}$.
+    \item \textbf{Protection contre le repliement de spectre (Shannon-Nyquist) :} Pour une boucle d'échantillonnage s'exécutant entre $100$ et $200\,\text{Hz}$, la coupure à $40\,\text{Hz}$ atténue complètement les harmoniques moteurs avant numérisation, interdisant tout repliement parasite vers les fréquences de commande.
+\end{enumerate}
+
+\subsection{Perturbations Aérodynamiques de Bernoulli par le Souffle des Moteurs}
+
+Selon la loi de Bernoulli, l'écoulement d'air rapide produit par les hélices induit une chute de pression statique locale au voisinage de la nacelle :
+\begin{equation}
+    \Delta P \approx \frac{1}{2} \rho v_{flux}^2
+\end{equation}
+Pour un flux d'air de seulement $6\,\text{m/s}$, $\Delta P \approx 22\,\text{Pa}$, ce qui correspond à une fausse variation d'altitude de \textbf{$1.8\,\text{mètre}$} !
+
+Pour neutraliser cet artefact aérodynamique, trois protections complémentaires sont mises en œuvre :
+\begin{enumerate}
+    \item \textbf{Protection mécanique (Prise de pression statique) :}
+    Le capteur BMP581 est confiné dans un boîtier ventilé garni de mousse acoustique à cellules ouvertes. Cette mousse agit comme un silencieux pneumatique et un amortisseur de turbulence, avec des évents orientés perpendiculairement au flux de propulsion.
+    \item \textbf{Filtrage matériel dans le composant :}
+    Activation du filtre IIR interne (\lstinline|bmp58x.setIIRFilterCoeff(bmp58x.eFilterCoeff15)|) et suréchantillonnage de pression 16x (OSR16), réduisant le bruit efficace à moins de $0.08\,\text{Pa RMS}$.
+    \item \textbf{Inflation dynamique de la covariance $R_{baro}$ dans le filtre :}
+    Lors des phases de forte poussée moteur, la confiance accordée au baromètre est dégradée proportionnellement à la consigne de gaz envoyée aux variateurs :
+    \begin{equation}
+        R_{baro}(u) = R_{baro, 0} + k_{prop} \sum_{i=1}^4 |u_{mot, i}|^2
+    \end{equation}
+    Pendant les transitoires d'accélération, le filtre de Kalman s'appuie temporairement sur la double intégration de l'accéléromètre et ignore les dépressions d'origine aérodynamique.
+\end{enumerate}
+
+\subsection{Atténuation de la Pollution Électromagnétique (CEM)}
+
+Les courants de puissance commutés par les variateurs électroniques (ESC) perturbent le magnétomètre de bord. Les mesures préventives adoptées consistent en :
+\begin{itemize}
+    \item L'éloignement physique du module CMPS12 / magnétomètre sur un mât dédié à l'écart des boucles de batterie.
+    \item Le torsadage systématique des câbles d'alimentation continue reliant la batterie LiPo aux contrôleurs moteurs ($B \propto I / d$).
+\end{itemize}
+
+\end{document}
+

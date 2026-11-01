@@ -1,0 +1,43 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{amsmath}
+\setcounter{MaxMatrixCols}{20}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{geometry}
+\geometry{a4paper, margin=2.5cm}
+\usepackage{subfiles}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    citecolor=blue!70!black,
+    urlcolor=blue!70!black
+}
+
+\title{Estimation de pose d'un dirigeable autonome :\\
+\large Formulations et modélisations du filtre de Kalman\\
+\normalsize Du modèle cinématique minimal au filtrage sur variété (ESKF)}
+\author{Grégory Barou}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\subfile{sections/01_introduction.tex}
+\subfile{sections/02_conventions.tex}
+\subfile{sections/03_situation1_minimal.tex}
+\subfile{sections/04_situation2_inertiel.tex}
+\subfile{sections/05_situation3_biais.tex}
+\subfile{sections/06_invariance_optimisation.tex}
+\subfile{sections/07_annexes.tex}
+
+\end{document}

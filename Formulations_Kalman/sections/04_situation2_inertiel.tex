@@ -1,0 +1,214 @@
+\documentclass[../Formulations_Kalman.tex]{subfiles}
+\begin{document}
+
+\subsection{Situation 2 : Avec entrées inertielles brutes}
+Cette configuration enrichit le modèle de référence minimal en introduisant les vitesses linéaires globales $(V_x, V_y, V_z)$ exprimées dans le repère de navigation global ($\mathcal{R}_{\text{nav}}$, correspondant à $\mathcal{R}_{\text{uwb}}$ en intérieur ou $\mathcal{R}_{\text{enu}}$ en extérieur), ainsi que les vitesses angulaires locales $(p, q, r)$ et les accélérations mesurées dans le repère embarqué ($a_x^b, a_y^b, a_z^b$).
+
+L'intégration de la cinématique inertielle soulève une divergence méthodologique majeure selon le formalisme d'attitude retenu : la formulation conventionnelle en angles d'Euler et la formulation moderne en quaternions d'erreur (ESKF). Ces deux variantes sont exposées et comparées ci-dessous.
+
+---
+
+\subsubsection{Variante A : Formulation en Angles d'Euler}
+
+\paragraph{Vecteur d'état et vecteur de mesure :}
+Le vecteur d'état $\hat{x}_{k\mid k}$ comprend 15 variables scalaires, et le vecteur de mesure $z_{k+1}$ en compte 13 :
+\begin{align}
+\hat{x} &= \begin{bmatrix} X & Y & Z & V_x & V_y & V_z & \phi & \theta & \psi & p & q & r & a_x^b & a_y^b & a_z^b \end{bmatrix}^T \\
+z_{k+1} &= \begin{bmatrix} X_{\text{pos}} & Y_{\text{pos}} & Z_{\text{pos}} & \phi_{imu} & \theta_{imu} & \psi_{imu} & p_{gyro} & q_{gyro} & r_{gyro} & a_{x,imu}^b & a_{y,imu}^b & a_{z,imu}^b & Z_{baro} \end{bmatrix}^T
+\end{align}
+
+\paragraph{Modèle de prédiction non-linéaire :}
+La prédiction intègre la cinématique complète du second ordre. L'accélération mesurée dans le repère corps est projetée dans le repère de navigation par la matrice de rotation $R_{b \to \text{nav}}(\Omega_k)$. Les vitesses angulaires locales pilotent l'attitude via la matrice de passage cinématique $R_{c}(\Omega_k)$ :
+\begin{equation}
+\hat{x}_{k+1\mid k} = \begin{bmatrix} 
+X_k + V_{x,k} \cdot dt \\ 
+Y_k + V_{y,k} \cdot dt \\ 
+Z_k + V_{z,k} \cdot dt \\
+\begin{bmatrix} V_{x,k} \\ V_{y,k} \\ V_{z,k} \end{bmatrix} + \left( R_{b \to \text{nav}}(\Omega_k) \begin{bmatrix} a_x^b \\ a_y^b \\ a_z^b \end{bmatrix} - \begin{bmatrix} 0 \\ 0 \\ g \end{bmatrix} \right) \cdot dt \\
+\begin{bmatrix} \phi_k \\ \theta_k \\ \psi_k \end{bmatrix} + R_{c}(\Omega_k) \begin{bmatrix} p_k \\ q_k \\ r_k \end{bmatrix} \cdot dt \\
+p_k \\ q_k \\ r_k \\
+a_{x,k}^b \\ a_{y,k}^b \\ a_{z,k}^b
+\end{bmatrix}
+\end{equation}
+
+\paragraph{Matrice Jacobienne de transition $F_k$ (Taille $15 \times 15$) :}
+En raison des couplages non-linéaires d'attitude, la Jacobienne $F_k = \frac{\partial f}{\partial x}\big|_{\hat{x}_{k\mid k}}$ prend la forme par blocs suivante :
+\begin{equation}
+F_k = \begin{bmatrix}
+I_3 & I_3 \cdot dt & 0_{3\times3} & 0_{3\times3} & 0_{3\times3} \\
+0_{3\times3} & I_3 & M(\Omega_k) \cdot dt & 0_{3\times3} & R_{b \to \text{nav}}(\Omega_k) \cdot dt \\
+0_{3\times3} & 0_{3\times3} & I_3 + J_{\partial \Omega}(\Omega_k) \cdot dt & R_{c}(\Omega_k) \cdot dt & 0_{3\times3} \\
+0_{3\times3} & 0_{3\times3} & 0_{3\times3} & I_3 & 0_{3\times3} \\
+0_{3\times3} & 0_{3\times3} & 0_{3\times3} & 0_{3\times3} & I_3
+\end{bmatrix}
+\end{equation}
+où la matrice des dérivées partielles de la cinématique angulaire $J_{\partial \Omega}(\Omega_k)$ s'écrit :
+\begin{equation}
+J_{\partial \Omega}(\Omega_k) = \begin{bmatrix} 
+q_k \cos(\phi_k)\tan(\theta_k) - r_k \sin(\phi_k)\tan(\theta_k) & \frac{q_k \sin(\phi_k) + r_k \cos(\phi_k)}{\cos^2(\theta_k)} & 0 \\ 
+-q_k \sin(\phi_k) - r_k \cos(\phi_k) & 0 & 0 \\ 
+\frac{q_k \cos(\phi_k) - r_k \sin(\phi_k)}{\cos(\theta_k)} & \frac{(q_k \sin(\phi_k) + r_k \cos(\phi_k))\sin(\theta_k)}{\cos^2(\theta_k)} & 0 
+\end{bmatrix}
+\end{equation}
+et la matrice des dérivées partielles de l'accélération tournée $M(\Omega_k) = \begin{bmatrix} \frac{\partial (R_{b \to \text{nav}} a^b)}{\partial \phi_k} & \frac{\partial (R_{b \to \text{nav}} a^b)}{\partial \theta_k} & \frac{\partial (R_{b \to \text{nav}} a^b)}{\partial \psi_k} \end{bmatrix}$ s'explicite analytiquement colonne par colonne :
+\begin{align}
+\frac{\partial (R_{b \to \text{nav}} a^b)}{\partial \phi_k} &= \begin{bmatrix}
+0 & (\cos\psi_k\sin\theta_k\cos\phi_k + \sin\psi_k\sin\phi_k) & (-\cos\psi_k\sin\theta_k\sin\phi_k + \sin\psi_k\cos\phi_k) \\
+0 & (\sin\psi_k\sin\theta_k\cos\phi_k - \cos\psi_k\sin\phi_k) & (-\sin\psi_k\sin\theta_k\sin\phi_k - \cos\psi_k\cos\phi_k) \\
+0 & \cos\theta_k\cos\phi_k & -\cos\theta_k\sin\phi_k
+\end{bmatrix} \begin{bmatrix} a_{x,k}^b \\ a_{y,k}^b \\ a_{z,k}^b \end{bmatrix} \\
+\frac{\partial (R_{b \to \text{nav}} a^b)}{\partial \theta_k} &= \begin{bmatrix}
+-\cos\psi_k\sin\theta_k & \cos\psi_k\cos\theta_k\sin\phi_k & \cos\psi_k\cos\theta_k\cos\phi_k \\
+-\sin\psi_k\sin\theta_k & \sin\psi_k\cos\theta_k\sin\phi_k & \sin\psi_k\cos\theta_k\cos\phi_k \\
+-\cos\theta_k & -\sin\theta_k\sin\phi_k & -\sin\theta_k\cos\phi_k
+\end{bmatrix} \begin{bmatrix} a_{x,k}^b \\ a_{y,k}^b \\ a_{z,k}^b \end{bmatrix} \\
+\frac{\partial (R_{b \to \text{nav}} a^b)}{\partial \psi_k} &= \begin{bmatrix}
+-\sin\psi_k\cos\theta_k & (-\sin\psi_k\sin\theta_k\sin\phi_k - \cos\psi_k\cos\phi_k) & (-\sin\psi_k\sin\theta_k\cos\phi_k + \cos\psi_k\sin\phi_k) \\
+\cos\psi_k\cos\theta_k & (\cos\psi_k\sin\theta_k\sin\phi_k - \sin\psi_k\cos\phi_k) & (\cos\psi_k\sin\theta_k\cos\phi_k + \sin\psi_k\sin\phi_k) \\
+0 & 0 & 0
+\end{bmatrix} \begin{bmatrix} a_{x,k}^b \\ a_{y,k}^b \\ a_{z,k}^b \end{bmatrix}
+\end{align}
+
+---
+
+\subsubsection{Variante B : Formulation en Quaternions d'erreur (ESKF)}
+
+\paragraph{Vecteurs d'état nominal et d'état d'erreur :}
+Dans la formulation ESKF, la représentation de l'attitude se découple rigoureusement :
+\begin{itemize}
+    \item L'\textbf{état nominal} $\hat{x}_{\text{nom}}$ ($\dim = 16$) contient la position $\mathbf{p}$, la vitesse $\mathbf{v}$, le quaternion unitaire $q \in \mathbb{H}_1$, la vitesse angulaire locale $\boldsymbol{\omega}$ et l'accélération locale $\mathbf{a}^b$ :
+    \begin{equation}
+    \hat{x}_{\text{nom}} = \begin{bmatrix} X & Y & Z & V_x & V_y & V_z & q_w & q_x & q_y & q_z & p & q & r & a_x^b & a_y^b & a_z^b \end{bmatrix}^T
+    \end{equation}
+    \item L'\textbf{état d'erreur minimal} $\delta x$ ($\dim = 15$) est défini dans l'espace tangent et ne comporte que 3 degrés de liberté pour l'attitude ($\delta\boldsymbol{\theta} \in \mathbb{R}^3$) :
+    \begin{equation}
+    \delta x = \begin{bmatrix} \delta X & \delta Y & \delta Z & \delta V_x & \delta V_y & \delta V_z & \delta\theta_x & \delta\theta_y & \delta\theta_z & \delta p & \delta q & \delta r & \delta a_x^b & \delta a_y^b & \delta a_z^b \end{bmatrix}^T
+    \end{equation}
+\end{itemize}
+
+\paragraph{Modèle de prédiction de l'état nominal (sans trigonométrie) :}
+L'état nominal est propagé par intégration cinématique directe. L'attitude progresse par produit de Hamilton et la rotation de l'accélération est purement algébrique :
+\begin{equation}
+\hat{x}_{\text{nom}, k+1\mid k} = \begin{bmatrix}
+\mathbf{p}_k + \mathbf{v}_k \cdot dt \\
+\mathbf{v}_k + \left( R(\hat{q}_k) \mathbf{a}_k^b - \mathbf{g} \right) \cdot dt \\
+\hat{q}_k \otimes \Delta q(\boldsymbol{\omega}_k dt) \\
+\boldsymbol{\omega}_k \\
+\mathbf{a}_k^b
+\end{bmatrix}
+\end{equation}
+où $\Delta q(\boldsymbol{\omega}_k dt) \approx \begin{bmatrix} 1 \\ \frac{1}{2} \boldsymbol{\omega}_k dt \end{bmatrix}$ et $R(\hat{q}_k) \mathbf{a}_k^b$ s'évalue par l'algèbre de Rodrigues sans aucun appel aux fonctions $\sin, \cos, \tan$.
+
+\paragraph{Matrice Jacobienne de transition d'erreur $F_{\delta, k}$ (Taille $15 \times 15$) :}
+En effectuant le développement au premier ordre de l'erreur sur la variété, les dérivées partielles de la rotation s'expriment au moyen des matrices antisymétriques usuelles :
+\begin{align}
+R(q) \mathbf{a}^b &\approx R(\hat{q}) (I_3 + [\delta\boldsymbol{\theta}\times]) (\hat{\mathbf{a}}^b + \delta\mathbf{a}^b) \approx R(\hat{q}) \hat{\mathbf{a}}^b - R(\hat{q}) [\hat{\mathbf{a}}^b \times] \delta\boldsymbol{\theta} + R(\hat{q}) \delta\mathbf{a}^b \\
+\delta\boldsymbol{\theta}_{k+1} &\approx (I_3 - [\boldsymbol{\omega}_k \times] dt) \delta\boldsymbol{\theta}_k + I_3 dt \cdot \delta\boldsymbol{\omega}_k
+\end{align}
+Il en résulte la matrice Jacobienne d'erreur $F_{\delta, k}$, d'une simplicité et d'une régularité remarquables :
+\begin{equation}
+F_{\delta, k} = \begin{bmatrix}
+I_3 & I_3 \cdot dt & 0_{3\times3} & 0_{3\times3} & 0_{3\times3} \\
+0_{3\times3} & I_3 & -R(\hat{q}_k) [\mathbf{a}_k^b \times] \cdot dt & 0_{3\times3} & R(\hat{q}_k) \cdot dt \\
+0_{3\times3} & 0_{3\times3} & I_3 - [\boldsymbol{\omega}_k \times] \cdot dt & I_3 \cdot dt & 0_{3\times3} \\
+0_{3\times3} & 0_{3\times3} & 0_{3\times3} & I_3 & 0_{3\times3} \\
+0_{3\times3} & 0_{3\times3} & 0_{3\times3} & 0_{3\times3} & I_3
+\end{bmatrix}
+\end{equation}
+\textbf{Avantage comparatif décisif :} Les matrices $J_{\partial\Omega}(\Omega)$ et $M(\Omega)$ aux dizaines de termes trigonométriques et divisions par $\cos^2\theta$ sont intégralement remplacées par les simples blocs linéaires $-R(\hat{q}_k)[\mathbf{a}_k^b\times]$ et $-[\boldsymbol{\omega}_k\times]$.
+
+---
+
+\subsubsection{Bruit de processus $Q_k$ (Taille $15 \times 15$, commun aux deux variantes)}
+Pour modéliser l'incertitude physique continue à travers les intégrateurs successifs du filtre, on introduit la variance du jerk local $\sigma_{\dot{a}}^2 = [\sigma_{\dot{a}x}^2, \sigma_{\dot{a}y}^2, \sigma_{\dot{a}z}^2]^T$ et la variance de l'accélération angulaire $\sigma_{\dot{\Omega}}^2 = [\sigma_{\dot{p}}^2, \sigma_{\dot{q}}^2, \sigma_{\dot{r}}^2]^T$.
+
+La matrice de covariance $Q_k$ (ou $Q_{\delta, k}$) s'organise par blocs couplés :
+\begin{equation}
+Q_k = \begin{bmatrix}
+Q_{\text{pos, vel, acc}} & 0_{9\times6} \\
+0_{6\times9} & Q_{\text{att, gyro}}
+\end{bmatrix}
+\end{equation}
+Où le bloc de translation ($9 \times 9$) s'écrit :
+\begin{equation}
+Q_{\text{pos, vel, acc}} = \begin{bmatrix}
+\frac{dt^5}{20} \cdot \text{diag}(\sigma_{\dot{a}}^2) & \frac{dt^4}{8} \cdot \text{diag}(\sigma_{\dot{a}}^2) & \frac{dt^3}{6} \cdot \text{diag}(\sigma_{\dot{a}}^2) \\
+\frac{dt^4}{8} \cdot \text{diag}(\sigma_{\dot{a}}^2) & \frac{dt^3}{3} \cdot \text{diag}(\sigma_{\dot{a}}^2) & \frac{dt^2}{2} \cdot \text{diag}(\sigma_{\dot{a}}^2) \\
+\frac{dt^3}{6} \cdot \text{diag}(\sigma_{\dot{a}}^2) & \frac{dt^2}{2} \cdot \text{diag}(\sigma_{\dot{a}}^2) & dt \cdot \text{diag}(\sigma_{\dot{a}}^2)
+\end{bmatrix}
+\end{equation}
+Et le bloc de rotation ($6 \times 6$) couple l'attitude (ou l'erreur angulaire $\delta\boldsymbol{\theta}$) et la vitesse angulaire :
+\begin{equation}
+Q_{\text{att, gyro}} = \begin{bmatrix}
+\frac{dt^3}{3} \cdot \text{diag}(\sigma_{\dot{\Omega}}^2) & \frac{dt^2}{2} \cdot \text{diag}(\sigma_{\dot{\Omega}}^2) \\
+\frac{dt^2}{2} \cdot \text{diag}(\sigma_{\dot{\Omega}}^2) & dt \cdot \text{diag}(\sigma_{\dot{\Omega}}^2)
+\end{bmatrix}
+\end{equation}
+
+---
+
+\subsubsection{Conditionnement des mesures et matrice d'observation $H_{k+1}$ (Taille $13 \times 15$)}
+Avant l'étape de correction, les grandeurs inertielles subissent deux pré-traitements en amont :
+\begin{enumerate}
+    \item \textbf{Désalignement mécanique IMU $\to$ Body :}
+    \begin{equation}
+    \boldsymbol{\omega}_{\text{body}} = R_{\text{imu} \to \text{body}} \boldsymbol{\omega}_{\text{brut}}, \quad \mathbf{a}_{\text{body}}^b = R_{\text{imu} \to \text{body}} \mathbf{a}_{\text{brut}}
+    \end{equation}
+    \item \textbf{Gravité terrestre et force spécifique :}
+    Si l'accéléromètre mesure la force spécifique brute (incluant $+1g$ au repos vers le haut), la gravité projetée dans le repère corps doit être soustraite :
+    \begin{equation}
+    \mathbf{a}_{\text{corrigé}}^b = \mathbf{a}_{\text{body}}^b - R_{b \to \text{nav}}^T \begin{bmatrix} 0 \\ 0 \\ g \end{bmatrix}
+    \end{equation}
+    Si la centrale intègre une fusion interne délivrant l'accélération linéaire sans pesanteur (\textit{Linear Acceleration}, nativement disponible sur le BNO085 et configurable sur le CMPS12), cette soustraction est superflue.
+\end{enumerate}
+
+Les bras de levier $\mathbf{r}_{\text{pos}}^b$ et $\mathbf{r}_{\text{baro}}^b$ sont compensés via la matrice d'orientation instantanée $R_{b \to \text{nav}}$.
+
+La matrice d'observation $H_{k+1}$ (ou $H_{\delta, k+1}$ en ESKF) conserve une structure d'identité creuse linéaire :
+\begin{equation}
+H_{k+1} = \begin{bmatrix}
+I_3 & 0_{3\times3} & 0_{3\times3} & 0_{3\times3} & 0_{3\times3} \\
+0_{3\times3} & 0_{3\times3} & I_3 & 0_{3\times3} & 0_{3\times3} \\
+0_{3\times3} & 0_{3\times3} & 0_{3\times3} & I_3 & 0_{3\times3} \\
+0_{3\times3} & 0_{3\times3} & 0_{3\times3} & 0_{3\times3} & I_3 \\
+\begin{matrix} 0\ 0\ 1 \end{matrix} & 0_{1\times3} & 0_{1\times3} & 0_{1\times3} & 0_{1\times3}
+\end{bmatrix}
+\end{equation}
+Dans la Variante B (ESKF), l'innovation de l'attitude est calculée directement par le quaternion d'écart :
+\begin{equation}
+y_{k+1}[\text{att}] = 2 \cdot \left( \hat{q}_{k+1\mid k}^* \otimes q_m \right)_v \in \mathbb{R}^3
+\end{equation}
+Après calcul du gain $K_{k+1}$ et mise à jour de la covariance, l'état nominal est corrigé par $\hat{q} \leftarrow \hat{q} \otimes [1, \frac{1}{2}\delta\hat{\boldsymbol{\theta}}]^T$ puis normalisé, et $\delta\hat{x} \leftarrow 0$.
+
+---
+
+\subsubsection{Matrice de covariance de mesure $R_{k+1}$ (Taille $13 \times 13$)}
+La matrice $R_{k+1}$ demeure diagonale :
+\begin{equation}
+\begin{split}
+R_{k+1} = \text{diag}(&\sigma_{X,\text{pos}}^2, \sigma_{Y,\text{pos}}^2, \sigma_{Z,\text{pos}}^2, \sigma_{\phi,imu}^2, \sigma_{\theta,imu}^2, \sigma_{\psi,imu}^2, \sigma_{p,gyro}^2, \sigma_{q,gyro}^2, \sigma_{r,gyro}^2, \\
+& \sigma_{ax,imu}^2, \sigma_{ay,imu}^2, \sigma_{az,imu}^2, \sigma_{baro}^2)
+\end{split}
+\end{equation}
+
+\paragraph{Justification de la non-modélisation des biais inertiels :}
+Les biais statiques du gyroscope et de l'accéléromètre ne sont pas adjoints au vecteur d'état dans cette situation pour trois motifs :
+\begin{itemize}
+    \item Les modules modernes (BNO085 et CMPS12) effectuent une auto-calibration dynamique continue en arrière-plan.
+    \item Les recalages absolus UWB/GPS et magnétiques à haute cadence bornent la dérive de l'estimateur.
+    \item Ce choix épargne 6 états supplémentaires (taille 21 au lieu de 15), préservant la cadence temps réel sur microcontrôleur.
+\end{itemize}
+
+\paragraph{Option Vitesse Doppler GNSS (Extérieur) :}
+En extérieur, le module Adafruit PA1010D peut fournir les vitesses cartésiennes $(V_E, V_N)$ par décalage Doppler (précision $\pm 0.05\text{ m/s}$). Le vecteur de mesure peut être étendu à 15 composantes, observant directement $[V_x, V_y]^T$ via un bloc $I_2$ dans $H_{k+1}$, consolidant la stabilité au vent.
+
+---
+
+\subsubsection{Synthèse comparative et recommandation pour la Situation 2}
+\begin{itemize}
+    \item \textbf{Avec l'Adafruit BNO085 :} La \textbf{Variante B (Quaternions / ESKF)} est la configuration de référence absolue. Le capteur délivre nativement les quaternions de rotation et les vitesses angulaires étalonnées. La chaîne de traitement ne comporte aucune fonction trigonométrique, assurant un temps de calcul minimal et une robustesse numérique totale.
+    \item \textbf{Avec le CMPS12 :} Bien que le capteur fournisse ses orientations sous forme d'angles d'Euler, la \textbf{Variante B (Quaternions / ESKF avec conversion amont)} demeure \textbf{fortement recommandée}. La conversion unique $(\phi, \theta, \psi) \to q_m$ coûte moins de $0.3\,\mu\text{s}$, tandis qu'elle supprime l'obligation d'évaluer les matrices $R_c$, $J_{\partial\Omega}$ et $M$ (plus de 30 évaluations transcendantes et divisions) à chaque cycle de prédiction.
+\end{itemize}
+
+\end{document}
+

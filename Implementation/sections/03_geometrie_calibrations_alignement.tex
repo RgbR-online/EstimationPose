@@ -1,0 +1,99 @@
+\documentclass[../Implementation.tex]{subfiles}
+\begin{document}
+
+\section{Géométrie, Calibrations et Procédure d'Alignement Initial}
+
+\subsection{Modélisation Géométrique et Effet de Bras de Levier}
+
+\subsubsection{Prise en compte logicielle du bras de levier accélérométrique}
+La cinématique complète du solide indéformable reliant l'accélération mesurée par une IMU déportée $\mathbf{a}_{\text{imu}}^b$ à l'accélération au centre de masse $\mathbf{a}_G^b$ est formellement établie dans le document compagnon \textbf{\texttt{Formulations\_Kalman.pdf}} (Section 2.2.4) :
+\begin{equation}
+    \mathbf{a}_{\text{imu}}^b = \mathbf{a}_G^b + \dot{\boldsymbol{\omega}} \times \mathbf{r}_{\text{imu}}^b + \boldsymbol{\omega} \times (\boldsymbol{\omega} \times \mathbf{r}_{\text{imu}}^b)
+\end{equation}
+
+Sur le plan de l'ingénierie logicielle et du conditionnement du signal :
+\begin{itemize}
+    \item \textbf{Implantation nominale dans la nacelle ($\|\mathbf{r}_{\text{imu}}^b\| \le 15\,\text{cm}$) :}
+    En raison de la faible réactivité angulaire du dirigeable ($\|\boldsymbol{\omega}\| \le 0.5\,\text{rad/s}$ et $\|\dot{\boldsymbol{\omega}}\| \le 0.8\,\text{rad/s}^2$), l'accélération tangentielle maximale n'excède pas $0.12\,\text{m/s}^2$ et l'accélération centripète reste inférieure à $0.038\,\text{m/s}^2$. Ces grandeurs étant de l'ordre du bruit de mesure RMS intrinsèque des puces MEMS en vol ($0.05\text{ à }0.15\,\text{m/s}^2$), \textbf{le terme de bras de levier inertiel n'est pas compensé logiciellement} lorsque la carte est intégrée dans la nacelle centrale.
+    \item \textbf{Implantation déportée ($\|\mathbf{r}_{\text{imu}}^b\| > 50\,\text{cm}$) :}
+    Si la centrale devait être déplacée vers l'empennage ou le nez de l'enveloppe, l'accélération tangentielle dépasserait $0.4\,\text{m/s}^2$. Le pilote d'acquisition applique alors une compensation amont par différence finie filtrée :
+    \begin{equation}
+        \mathbf{a}_{G,\text{corrigé}}^b = \mathbf{a}_{\text{imu, brut}}^b - \left( \frac{\boldsymbol{\omega}_k - \boldsymbol{\omega}_{k-1}}{\Delta t} \right) \times \mathbf{r}_{\text{imu}}^b - \boldsymbol{\omega}_k \times (\boldsymbol{\omega}_k \times \mathbf{r}_{\text{imu}}^b)
+    \end{equation}
+\end{itemize}
+
+\subsubsection{Propriétés d'invariance des autres instruments}
+\begin{itemize}
+    \item \textbf{Gyromètre :} En vertu de l'uniformité du champ des vitesses angulaires instantanées sur un solide indéformable, la mesure gyrométrique est \textbf{strictement insensible à la position} ($\boldsymbol{\omega}_S = \boldsymbol{\omega}_G$). Son emplacement n'exige aucune compensation géométrique.
+    \item \textbf{Magnétomètre / Boussole :} Le champ géomagnétique terrestre étant homogène à l'échelle du véhicule, la position spatiale n'a aucun effet. En revanche, si le magnétomètre est déporté sur un mât pour s'éloigner des moteurs, son repère propre peut être incliné par rapport aux axes corps, imposant une matrice d'alignement rotationnel fixe $R_{\text{mag}}^{\text{body}}$ :
+    \begin{equation}
+        \mathbf{B}^b = R_{\text{mag}}^{\text{body}} \cdot \mathbf{B}_{\text{mes}}
+    \end{equation}
+    \item \textbf{Position absolue (UWB, GNSS, Baromètre) :} Les mesures sont ramenées au centre de gravité par simple projection d'attitude instantanée :
+    \begin{equation}
+        p_{G,\text{corrigé}} = p_{\text{brut}} - R_{b \to \text{nav}}(\hat{q}) \cdot \mathbf{r}_{\text{pos}}^b
+    \end{equation}
+\end{itemize}
+
+\subsection{Matrice Décisionnelle des Calibrations Embarquées}
+
+Le tableau synthétise la périodicité, les conditions de déclenchement et les actions logicielles associées à chaque type d'événement mécanique ou électrique :
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{p{4.0cm}p{3.0cm}p{8cm}}
+\toprule
+\textbf{Événement opérationnel} & \textbf{Calibration requise ?} & \textbf{Procédure et Actions Embarquées} \\
+\midrule
+Changement de position des balises UWB au sol & \textbf{Oui (Critique)} & Ré-étalonner les coordonnées 3D des balises dans le repère monde $\mathcal{R}_{\text{nav}}$. Mettre à jour le fichier de configuration \lstinline|config.ini| ou procéder par trilatération statique au sol. \\
+\addlinespace
+Déplacement physique d'un capteur sur la structure & \textbf{Oui (Géométrie)} & Mesurer le nouveau vecteur bras de levier $\mathbf{r}_{S/G}^b$ et les angles d'Euler de la matrice d'alignement $R_{\text{sensor}}^{\text{body}}$. \\
+\addlinespace
+Remplacement d'un composant électronique & \textbf{Oui (Partielle)} & Nouveau capteur = nouvelles caractéristiques de biais d'usine. Recalibrer les zéros et valider l'adresse I2C/SPI. \\
+\addlinespace
+Démarrage / Redémarrage de la Teensy 4.1 & \textbf{Calibration rapide (2 s)} & Les paramètres statiques sont chargés depuis la mémoire Flash. Une routine de 2 secondes au repos (\textit{Zero-Velocity Update}) estime le biais gyrométrique initial. \\
+\addlinespace
+Retrait ou absence de la carte SD & \textbf{Non} & Le système bascule automatiquement sur les constantes par défaut compilées en mémoire Flash interne. \\
+\bottomrule
+\end{tabular}
+\caption{Matrice d'impact des événements sur les besoins de calibration.}
+\label{tab:matrice_calibrations}
+\end{table}
+
+\subsection{Procédure d'Alignement Initial au Sol (\textit{Cold Start})}
+
+Au démarrage du système de navigation, l'état initial ne peut pas être arbitrairement fixé à zéro sans induire une divergence immédiate lors du décollage. Une procédure d'alignement stationnaire de 2 à 3 secondes est automatiquement exécutée au sol dans la routine d'initialisation \lstinline|setup()| :
+
+\begin{enumerate}
+    \item \textbf{Vérification d'immobilité :} 
+    Le calculateur confirme l'état stationnaire du dirigeable en s'assurant que la variance des mesures accélérométriques calculée sur 50 échantillons consécutifs reste inférieure à un seuil strict ($\hat{\sigma}_a^2 < 0.05\,\text{m/s}^2$).
+    
+    \item \textbf{Nivellement par gravité (\textit{Coarse Leveling}) :} 
+    Au repos sur le banc, la seule force spécifique mesurée par l'accéléromètre est la réaction à la pesanteur terrestre ($f_b \approx -R^T g$). Les angles d'assiette initiaux en roulis et tangage sont extraits analytiquement :
+    \begin{align}
+        \theta_0 &= \arctan\left(\frac{-a_x}{\sqrt{a_y^2 + a_z^2}}\right) \\
+        \phi_0 &= \arctan\left(\frac{a_y}{a_z}\right)
+    \end{align}
+    Dans le cas de l'Adafruit BNO085, le quaternion d'assiette initial $\hat{q}_0$ est directement initialisé par la première trame stabilisée du rapport de rotation SH-2.
+
+    \item \textbf{Alignement de cap magnétique (\textit{Heading Alignment}) :} 
+    Le cap initial $\psi_0$ est mesuré par le magnétomètre (CMPS12 ou BNO085) et corrigé de la déclinaison magnétique locale du site d'évolution, conformément aux lois de recalage établies en Section 2 de \textbf{\texttt{Formulations\_Kalman.pdf}}.
+
+    \item \textbf{Initialisation de la position spatiale et de l'altitude :} 
+    \begin{itemize}
+        \item En vol extérieur : attente d'un point fixe GNSS stabilisé (minimum 6 satellites, $\text{HDOP} < 2.0$), fixant les coordonnées d'origine $(X_0, Y_0)$ du repère local tangent ENU.
+        \item En vol intérieur : attente de la réception d'au moins 3 balises UWB actives avec un indice de confiance $C_k > 0.7$.
+        \item Altitude $Z_0$ : tarage de la pression barométrique de référence au sol $P_0$ sur le composant BMP581 ($Z_0 = 0\,\text{m}$).
+    \end{itemize}
+
+    \item \textbf{Configuration de la covariance initiale $P_0$ :} 
+    La matrice $P_0$ est initialisée sous forme diagonale par blocs :
+    \begin{equation}
+        P_0 = \text{diag}\left(\sigma_{pos, 0}^2 I_3, \; \sigma_{vel, 0}^2 I_3, \; \sigma_{att, 0}^2 I_3, \; \sigma_{bias, 0}^2 I_6\right)
+    \end{equation}
+    avec $\sigma_{vel, 0}^2 = 10^{-4}\,\text{m}^2/\text{s}^2$ (vitesse au sol quasi-nulle certifiée) et $\sigma_{pos, 0}^2$ calibré sur la précision nominale du capteur de position absolu actif.
+\end{enumerate}
+
+\end{document}
+

@@ -1,0 +1,110 @@
+\documentclass[../Formulations_Kalman.tex]{subfiles}
+\begin{document}
+
+\section{Synthèse comparative, optimisations et guide de préconisations}
+
+\subsection{Invariance temporelle des matrices et pré-allocation mémoire}
+Bien que le filtre de Kalman Étendu soit par nature un algorithme dynamique réactualisé à chaque pas temporel $k$, l'architecture déportée formalisée dans ce document permet d'isoler des blocs fondamentaux rigoureusement \textbf{indépendants du temps} (invariants par rapport à $k$) :
+\begin{itemize}
+    \item \textbf{La matrice d'observation $H_{k+1}$ (ou $H_{\delta, k+1}$) :} Grâce à la projection spatiale, au recalage multi-repères et à la compensation des bras de levier déportés en amont dans la phase de conditionnement, la matrice $H$ ne dépend d'aucun état dynamique. Elle est strictement constante, binaire et creuse pour l'ensemble des situations (1, 2 et 3).
+    \item \textbf{Les composantes nominales des matrices de bruit $Q_k$ et $R_{k+1}$ :} À l'exception des variances de position absolue actualisées dynamiquement selon la qualité radio ($C_k$ en UWB) ou satellitaire (HDOP/VDOP en GPS), les blocs d'incertitude inertielle, barométrique et d'attitude sont stationnaires.
+\end{itemize}
+
+\textbf{Impact sur l'implémentation embarquée (Teensy 4.1) :} \\
+Ces structures matricielles peuvent être allouées statiquement en mémoire Flash/RAM au démarrage de la carte microcontrôleur. Cette stratégie évite toute instanciation dynamique en cours d'exécution, prévient la fragmentation de la mémoire et supprime des centaines d'opérations d'écriture par cycle de calcul.
+
+---
+
+\subsection{Bilan comparatif approfondi : Angles d'Euler vs Quaternions (ESKF)}
+Le tableau~\ref{tab:comparatif_euler_quaternion} synthétise les critères mathématiques, algorithmiques et computationnels opposant la formulation en angles d'Euler et la formulation en quaternions d'erreur (ESKF) dans le cadre des Situations dynamiques 2 et 3.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{p{4.8cm} p{5.2cm} p{5.4cm}}
+\toprule
+\textbf{Critère d'évaluation} & \textbf{Formulation Angles d'Euler} & \textbf{Formulation Quaternions (ESKF)} \\
+\midrule
+\textbf{Appels transcendants en prédiction ($\sin, \cos, \tan$)} & Très élevé ($> 30$ évaluations trigonométriques dans $R_c$, $J_{\partial\Omega}$ et $M$) & \textbf{Strictement aucun} (produits de Hamilton et matrices antisymétriques purs) \\
+\midrule
+\textbf{Risque de singularité numérique} & Présence de divisions par $\cos\theta$ et $\cos^2\theta$ (instabilité potentielle si $\theta \to \pm 90^\circ$) & \textbf{Nul} : variété unitaire $\mathbb{S}^3$ sans singularité globale \\
+\midrule
+\textbf{Continuité de cap (Lacet $\psi$)} & Discontinuité à $0^\circ / 360^\circ$ imposant un repliement angulaire systématique (\textit{atan2}) & \textbf{Continu} : l'innovation est vectorielle et absorbée sans saut par $\delta q = \hat{q}^* \otimes q_m$ \\
+\midrule
+\textbf{Complexité de la Jacobienne $F_k$} & Extrêmement lourde (27 dérivées croisées analytiques dans $M(\Omega)$) & \textbf{Minimale et élégante} (uniquement des blocs $-R[\mathbf{a}^b\times]$ et $-[\boldsymbol{\omega}\times]$) \\
+\midrule
+\textbf{Dimension de la covariance $P$} & Minimale : $15 \times 15$ (Sit. 2) ou $16 \times 16$ (Sit. 3) & Minimale : $15 \times 15$ (Sit. 2) ou $16 \times 16$ (Sit. 3) grâce à l'espace d'erreur tangent $\delta\boldsymbol{\theta} \in \mathbb{R}^3$ \\
+\midrule
+\textbf{Conditionnement amont (CMPS12)} & Direct (angles déjà fournis en Euler) & Requièrt une conversion Euler $\to$ Quaternion en entrée ($\approx 0.3\,\mu\text{s}$) \\
+\midrule
+\textbf{Conditionnement amont (BNO085)} & Requiert une conversion Quaternion $\to$ Euler & \textbf{Direct et natif} sans aucune conversion \\
+\midrule
+\textbf{Temps de calcul estimé sur Cortex-M7 (600 MHz)} & $\approx 35 \text{ à } 45\,\mu\text{s}$ par cycle de prédiction & \textbf{$\approx 8 \text{ à } 12\,\mu\text{s}$} par cycle de prédiction (gain d'un facteur 4) \\
+\bottomrule
+\end{tabular}
+\caption{Comparaison technico-mathématique entre les formulations Euler et Quaternions (ESKF).}
+\label{tab:comparatif_euler_quaternion}
+\end{table}
+
+---
+
+\subsection{Spécificités physiques du dirigeable et analyse de sensibilité}
+Dans les applications aérospatiales classiques (avions de voltige, missiles, drones multicoptères), l'élimination du blocage de cardan (\textit{Gimbal lock}) à $\theta = \pm 90^\circ$ constitue l'argument décisif imposant les quaternions.
+
+\textbf{Pour notre dirigeable autonome, l'analyse physique est différente :}
+\begin{itemize}
+    \item Le métacentre du dirigeable (distance entre le centre de flottabilité du ballon et le centre de gravité de la nacelle située en partie basse) génère un couple pendulaire de rappel aéro-statique permanent et puissant.
+    \item En conditions normales et même sous de fortes rafales de vent, le tangage $\theta$ et le roulis $\phi$ oscillent dans une plage restreinte, comprise entre $\pm 10^\circ$ et $\pm 25^\circ$, ne s'approchant jamais de la zone critique des $\pm 90^\circ$.
+    \item Par conséquent, l'argument du blocage de cardan physique n'est \textbf{pas} la raison première d'adopter les quaternions sur le dirigeable.
+\end{itemize}
+
+\textbf{La véritable motivation d'ingénierie réside dans l'optimisation algorithmique :}
+C'est l'extrême simplicité de la matrice de transition $F_{\delta, k}$ (remplaçant les blocs trigonométriques $J_{\partial\Omega}$ et $M$ par de simples matrices antisymétriques), la réduction drastique du temps d'exécution CPU et l'immunité aux discontinuités de cap à $360^\circ$ qui rendent le formalisme quaternionique (ESKF) nettement supérieur pour le contrôleur embarqué.
+
+---
+
+\subsection{Guide de préconisation pratique : Matrice décisionnelle}
+Le tableau~\ref{tab:matrice_decision} présente la matrice de recommandation pratique guidant le choix d'implémentation en fonction de la situation du filtre et de la centrale inertielle sélectionnée.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{p{2.8cm} p{3.2cm} p{4.0cm} p{4.8cm}}
+\toprule
+\textbf{Situation} & \textbf{Centrale IMU} & \textbf{Formalisme recommandé} & \textbf{Justification opérationnelle} \\
+\midrule
+\textbf{Situation 1} \newline (Minimal) & \textbf{CMPS12} & \textbf{Angles d'Euler (Variante A)} & Modèle stationnaire ($F=I_6$). Le capteur sort directement du $(\phi, \theta, \psi)$. Zéro conversion, calcul minimal. \\
+\midrule
+\textbf{Situation 1} \newline (Minimal) & \textbf{Adafruit BNO085} & \textbf{Angles d'Euler (Variante A)} \newline \textit{(ou Quaternions simples)} & Une simple conversion du quaternion mesuré en Euler permet de conserver un filtre scalaire linéaire et lisible. \\
+\midrule
+\textbf{Situation 2 \& 3} \newline (Inertiel \& Biais) & \textbf{CMPS12} & \textbf{Quaternions ESKF (Variante B)} \newline \textit{(avec conversion amont)} & Bien que le CMPS12 fournisse de l'Euler, la conversion amont ($< 0.3\,\mu\text{s}$) est immédiatement rentabilisée par l'absence totale de trigonométrie dans $F_k$. \\
+\midrule
+\textbf{Situation 2 \& 3} \newline (Inertiel \& Biais) & \textbf{Adafruit BNO085} & \textbf{Quaternions ESKF (Variante B)} \newline \textbf{[Configuration Optimale]} & \textbf{Le standard d'excellence :} le BNO085 délivre nativement les quaternions et vitesses angulaires. Chaîne d'estimation $100\%$ quaternionique sans conversion ni approximation. \\
+\bottomrule
+\end{tabular}
+\caption{Matrice de recommandation opérationnelle croisant Situation et Capteur IMU.}
+\label{tab:matrice_decision}
+\end{table}
+
+\subsubsection{Synthèse des préconisations pour le projet}
+\begin{enumerate}
+    \item \textbf{Phase de mise en service et validation initiale au banc (Situation 1) :}
+    Débuter avec la \textbf{Variante A en Angles d'Euler} et le module \textbf{CMPS12}. Cette approche permet de valider rapidement l'étalonnage des capteurs absolus (UWB, GPS, Baromètre) et la chaîne de communication sans complexité algébrique.
+    \item \textbf{Phase de vol nominal et stabilisation dynamique fine (Situations 2 et 3) :}
+    Déployer la \textbf{Variante B en Quaternions d'erreur (ESKF)} :
+    \begin{itemize}
+        \item Si le matériel embarqué reste le \textbf{CMPS12}, activer la conversion amont Euler $\to$ Quaternion formalisée à la section 2.
+        \item Si le matériel évolue vers l'\textbf{Adafruit BNO085}, exploiter directement les trames de quaternions de rotation natives (\textit{Rotation Vector} du coprocesseur SH-2), aboutissant à l'architecture d'estimation la plus performante, la plus rapide et la plus robuste pour le dirigeable.
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Architecture Documentaire Globale et Liens Inter-Documents}
+Afin de préserver une modularité stricte et d'éviter les redondances ou incohérences, le projet s'articule autour de trois documents de référence complémentaires :
+\begin{enumerate}
+    \item \textbf{\texttt{Formulations\_Kalman.pdf} (Présent document) :} Traité mathématique et stochastique fondamental. Il établit les équations continues et discrétisées du filtre (EKF et ESKF sur $SO(3)$), les démonstrations de stabilité (forme de Joseph, projection orthogonale de Frobenius), les tests d'hypothèse statistique ($\chi^2$ de Mahalanobis) et les lois de conditionnement spatial en amont.
+    \item \textbf{\texttt{Materiel.pdf} (\textit{Spécifications et Caractérisation Matérielle}) :} Référence technique des composants physiques. Il inventorie les caractéristiques constructeurs, les adresses I2C, les protocoles (SHTP, NMEA, PANS), le brochage de la Teensy 4.1, les interruptions matérielles, les bilans de puissance électrique et les contraintes CEM.
+    \item \textbf{\texttt{Implementation.pdf} (\textit{Spécifications et Architecture d'Implémentation}) :} Guide d'ingénierie logicielle embarquée pour microcontrôleur Cortex-M7. Il détaille l'ordonnancement temps réel, le traitement asynchrone des capteurs, la gestion statique de la mémoire sans allocation dynamique (DTCM versus OCRAM/DMA), et les mécanismes de reprise sur panne sans réinitialisation CPU.
+\end{enumerate}
+
+\end{document}
+

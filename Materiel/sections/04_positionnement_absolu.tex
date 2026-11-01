@@ -1,0 +1,93 @@
+\documentclass[../Materiel.tex]{subfiles}
+\begin{document}
+
+\section{Systèmes de Positionnement Absolu : GNSS/GPS et UWB}
+
+\subsection{Module Récepteur GNSS Adafruit (MediaTek MTK3333 / PA1616S)}
+
+\subsubsection{Composant nu vs Breakout Adafruit}
+Le module repose sur le récepteur GNSS \textbf{CD-PA1616S} (conçu par GlobalTop / MediaTek), qui intègre le processeur de navigation à 66 canaux \textbf{MediaTek MTK3333}, une antenne patch céramique ($15 \times 15\,\text{mm}$), et un connecteur miniature u.FL pour antenne active externe.
+
+Le breakout commercialisé par Adafruit y adjoint un régulateur $3.3\,\text{V}$, un circuit d'adaptation I2C (adresse \texttt{0x10}) et un support de pile bouton CR1220 pour la conservation des éphémérides (\textit{Hot Start} en moins de $2\,\text{s}$).
+
+\begin{figure}[htbp]
+\centering
+\small
+\begin{tabular}{|c|c|c|l|}
+\hline
+\textbf{Broche GPS} & \textbf{Type} & \textbf{Tension} & \textbf{Fonction et Comportement} \\
+\hline
+\texttt{VIN} & Alimentation & $3.3\,\text{V} - 5.0\,\text{V}$ & Entrée alimentation générale \\
+\texttt{GND} & Masse & $0\,\text{V}$ & Référence de masse commune \\
+\texttt{TX / SDA} & Sortie / E/S & $3.3\,\text{V}$ & Émission série NMEA ou ligne de données I2C \\
+\texttt{RX / SCL} & Entrée & $3.3\,\text{V}$ & Réception commandes PMTK ou horloge I2C \\
+\texttt{PPS} & Sortie logique & $3.3\,\text{V}$ & \textbf{Pulse Per Second :} front montant à $\pm 10\,\text{ns}$ du temps UTC \\
+\texttt{FIX} & Sortie logique & $3.3\,\text{V}$ & État du verrouillage (clignote à 1 Hz sans fix, 0.07 Hz avec fix) \\
+\texttt{EN} & Entrée logique & $3.3\,\text{V}$ & Activer/Désactiver le module (tirée à l'état haut par défaut) \\
+\hline
+\end{tabular}
+\caption{Brochage du module récepteur Adafruit Ultimate GPS.}
+\end{figure}
+
+\subsubsection{Protocoles, Cadencement et Latence temporelle pure}
+\begin{itemize}
+    \item \textbf{Format des trames NMEA 0183 :} Le module génère les trames périodiques standards :
+    \begin{itemize}
+        \item \texttt{\$GPGGA} : Heure UTC, Latitude, Longitude, Indicateur de Fix, Nombre de satellites, HDOP ($0.5\text{ à }9.9$), Altitude géodésique MSL.
+        \item \texttt{\$GPRMC} : Heure, Statut, Coordonnées, Vitesse sol (\textit{Speed over Ground}), Cap vrai (\textit{Track Angle}).
+    \end{itemize}
+    \item \textbf{Fréquence d'échantillonnage réglable :}
+    Par défaut à $1\,\text{Hz}$, la cadence peut être configurée jusqu'à \textbf{$10\,\text{Hz}$} via la commande PMTK :
+\begin{lstlisting}
+GPS.sendCommand(PMTK_SET_NMEA_UPDATE_10HZ); // Trame toutes les 100 ms
+\end{lstlisting}
+    \item \textbf{Évaluation de la latence temporelle pure ($\tau_{latence}$) :}
+    Entre l'instant physique d'émission des signaux satellites et la fin de transmission de la trame décodée sur le bus de la Teensy, s'écoulent entre \textbf{$100\,\text{ms}$ et $200\,\text{ms}$}. Cette latence physique doit être compensée cinématiquement dans le filtre de Kalman.
+\end{itemize}
+
+---
+
+\subsection{Système de Positionnement Intérieur UWB (Decawave DWM1001-DEV)}
+
+\subsubsection{Composant nu vs Module DWM1001-DEV}
+Le système de localisation Ultra-Wideband repose sur le module certifié \textbf{Decawave DWM1001C}, qui assemble :
+\begin{enumerate}
+    \item L'émetteur-récepteur UWB \textbf{DW1000} (conforme IEEE 802.15.4-2011, opérant sur les canaux 5 et 7 à $6.5\,\text{GHz}$).
+    \item Le microcontrôleur \textbf{Nordic Semiconductor nRF52832} (cœur ARM Cortex-M4 avec radio BLE 2.4 GHz).
+    \item Le micrologiciel embarqué propriétaire \textbf{PANS} (\textit{Positional Architecture for Networked Systems}).
+\end{enumerate}
+
+La carte d'évaluation \textbf{DWM1001-DEV} intègre une antenne UWB omnidirectionnelle en PCB, un port USB avec convertisseur J-Link/UART, et expose les bus de communication sur deux connecteurs femelles latéraux.
+
+\begin{figure}[htbp]
+\centering
+\small
+\begin{tabular}{|c|c|c|l|}
+\hline
+\textbf{Broche DWM1001} & \textbf{Type} & \textbf{Tension} & \textbf{Rôle dans l'architecture} \\
+\hline
+\texttt{VCC} & Alimentation & $2.8\,\text{V} - 3.6\,\text{V}$ & Alimentation principale régulée $3.3\,\text{V}$ \\
+\texttt{GND} & Masse & $0\,\text{V}$ & Plan de masse \\
+\texttt{UART TX / RX} & Interface série & $3.3\,\text{V}$ & Communication à $115\,200\,\text{Bauds}$ (mode binaire TLV ou shell texte) \\
+\texttt{SPI MOSI/MISO/CLK/CS}& Interface bus & $3.3\,\text{V}$ & Bus esclave rapide jusqu'à $8\,\text{MHz}$ \\
+\texttt{READY / GPIO} & Sortie logique & $3.3\,\text{V}$ & \textbf{Interruption Data Ready} (nouvelle position calculée) \\
+\texttt{RESET} & Entrée logique & $3.3\,\text{V}$ & Réinitialisation matérielle (actif bas) \\
+\hline
+\end{tabular}
+\caption{Signaux de communication du module UWB DWM1001.}
+\end{figure}
+
+\subsubsection{Performances et Formats de Données UWB}
+\begin{itemize}
+    \item \textbf{Précision de positionnement :} Typiquement $\pm 10\,\text{cm}$ en visibilité directe (\textit{Line-of-Sight - LOS}) dans un volume couvert par au moins 4 balises fixes (\textit{Anchors}).
+    \item \textbf{Sorties exploitables par la Teensy 4.1 :}
+    \begin{enumerate}
+        \item \textit{Position Cartésienne 3D résolue :} Coordonnées relatives $(X, Y, Z)$ en millimètres calculées directement par le solveur de trilatération interne du DWM1001.
+        \item \textit{Distances brutes Temps de Vol (ToF) :} Distances scalaires $d_i$ séparant le dirigeable de chacune des balises fixes $i$, idéales pour une fusion directe non-linéaire dans l'EKF.
+        \item \textit{Indicateur de qualité $Q$ :} Indice de confiance stochastique ($0\text{ à }100\%$) exploité pour pondérer dynamiquement la matrice $R_{uwb}$ du filtre de Kalman.
+    \end{enumerate}
+    \item \textbf{Fréquence et latence :} Le protocole PANS rafraîchit la position à une cadence nominale de \textbf{$10\,\text{Hz}$} avec une latence réseau déterministe très faible ($\tau_{latence} \approx 20\text{ à }35\,\text{ms}$).
+\end{itemize}
+
+\end{document}
+

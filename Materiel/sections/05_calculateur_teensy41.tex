@@ -1,0 +1,180 @@
+\documentclass[../Materiel.tex]{subfiles}
+\begin{document}
+
+\section{Calculateur Embarqué : PJRC Teensy 4.1 (Cortex-M7)}
+
+\subsection{Architecture Processeur : NXP i.MXRT1062 (ARM Cortex-M7)}
+
+Le cœur informatique du système de navigation repose sur la carte de développement \textbf{PJRC Teensy 4.1}, équipée d'un microcontrôleur « Crossover » \textbf{NXP i.MXRT1062}. Ce composant associe la puissance de calcul brute d'un processeur d'application embarqué au déterminisme temporel strict et aux faibles latences d'un microcontrôleur temps réel.
+
+\begin{figure}[htbp]
+\centering
+\small
+\begin{tabular}{|l|p{10.5cm}|}
+\hline
+\textbf{Caractéristique} & \textbf{Spécification technique \& Impact pour le dirigeable} \\
+\hline
+Cœur CPU & ARM Cortex-M7 (ARMv7E-M), cadence native de \textbf{600 MHz} \\
+Architecture pipeline & Superscalaire à double émission d'instructions (\textit{dual-issue}), 6 étages \\
+Prédiction de branchement & Prédiction dynamique (BTB) et statique pour éliminer les ruptures de pipeline \\
+Unité flottante (FPU) & VFPv5 matérielle : simple précision (\texttt{float32}) et double précision (\texttt{float64}) \\
+Mémoire cache L1 & $32\,\text{Ko}$ de cache d'instructions (I-Cache) + $32\,\text{Ko}$ de cache de données (D-Cache) \\
+Mémoire TCM interne & $512\,\text{Ko}$ de mémoire couplée étroitement (\textit{Tightly-Coupled Memory}) à zéro cycle d'attente \\
+Mémoire OCRAM & $512\,\text{Ko}$ de RAM sur puce (\textit{On-Chip RAM}) accessible par le bus AXI et le contrôleur DMA \\
+Mémoire Flash & $8\,\text{Mo}$ Flash QSPI (Winbond W25Q64JV) connectée via FlexSPI avec exécution en place (XIP) \\
+Extensions mémoire & Deux empreintes CMS sous la carte pour puces PSRAM ($8/16\,\text{Mo}$) ou Flash NAND/NOR \\
+Consommation typique & $\approx 100\,\text{mA}$ sous $3.3\,\text{V}$ ($\approx 0.33\,\text{W}$), négligeable face à la propulsion \\
+\hline
+\end{tabular}
+\caption{Synthèse des caractéristiques architecturales de la Teensy 4.1 (NXP i.MXRT1062).}
+\label{tab:teensy41_spec}
+\end{figure}
+
+\subsubsection{Unité de Calcul en Virgule Flottante (FPU VFPv5)}
+La Teensy 4.1 intègre une FPU matérielle conforme à la norme IEEE 754 :
+\begin{itemize}
+    \item \textbf{Simple précision (\texttt{float}, 32 bits) :} Les opérations arithmétiques fondamentales (addition, soustraction, multiplication) ainsi que l'opération de multiplication-accumulation fusionnée (\texttt{VFMA} : $a \leftarrow a + b \cdot c$) s'exécutent en \textbf{1 seul cycle d'horloge} ($1.667\,\text{ns}$).
+    \item \textbf{Double précision (\texttt{double}, 64 bits) :} Prise en charge directement par le silicium. Une addition ou multiplication double précision prend $2$ à $3$ cycles. La racine carrée et la division double précision prennent environ $14$ cycles, sans bloquer les autres instructions grâce au découplage matériel.
+    \item \textbf{Compromis algorithmique :} Le filtre de Kalman étendu (EKF) est compilé en simple précision (\texttt{float32}) pour l'ensemble des propagations d'état et multiplications matricielles, offrant une accélération d'un facteur 2 à 3 et une consommation mémoire divisée par deux, tout en conservant une précision de position sub-millimétrique très largement supérieure au bruit intrinsèque des capteurs MEMS.
+\end{itemize}
+
+\subsubsection{Chronométrage Ultra-Haute Résolution (DWT Cycle Counter)}
+Le cœur Cortex-M7 intègre le bloc de traçage et débogage \textbf{DWT} (\textit{Data Watchpoint and Trace}), dont le registre 32 bits \texttt{ARM\_DWT\_CYCCNT} s'incrémente à chaque cycle d'horloge du CPU ($600\,\text{MHz}$) :
+\begin{equation}
+    \Delta t = \frac{\Delta \text{CYCCNT}}{600 \times 10^6} \quad (\text{Résolution : } 1.667\,\text{ns})
+\end{equation}
+L'interrogation de ce registre (\lstinline|uint32_t t = ARM_DWT_CYCCNT;|) s'effectue en \textbf{un seul cycle machine}, sans aucun surcoût d'interruption ni appel système. Cela permet de profiler avec une précision absolue les temps d'exécution de la prédiction EKF, des inversions matricielles et des transactions I2C, sans introduire la gigue d'un appel à \lstinline|micros()|.
+
+\subsection{Architecture Mémoire et Règles d'Allocation DMA}
+
+L'organisation interne de la mémoire du processeur i.MXRT1062 repose sur une matrice de bus Harvard modifiée, cruciale pour les performances temps réel :
+
+\begin{figure}[htbp]
+\centering
+\small
+\begin{tabular}{|l|c|c|p{7.5cm}|}
+\hline
+\textbf{Zone Mémoire} & \textbf{Adresse début} & \textbf{Taille} & \textbf{Caractéristiques d'accès \& Utilisation} \\
+\hline
+\textbf{ITCM} & \texttt{0x00000000} & $512\,\text{Ko}$ & Instructions à 600 MHz, \textbf{0 cycle d'attente}. Code critique EKF. \\
+\textbf{DTCM} & \texttt{0x20000000} & $512\,\text{Ko}$ & Données à 600 MHz, \textbf{0 cycle d'attente}. Vecteurs d'état $\hat{x}$, covariances $P$, piles d'exécution. \\
+\textbf{OCRAM} & \texttt{0x20200000} & $512\,\text{Ko}$ & RAM système sur bus AXI. Accessible par les périphériques et contrôleurs DMA (eDMA). \\
+\textbf{Flash QSPI} & \texttt{0x60000000} & $8\,\text{Mo}$ & Stockage non volatile du firmware et des tables de configuration statiques. \\
+\hline
+\end{tabular}
+\caption{Organisation de la mémoire interne du microcontrôleur Teensy 4.1.}
+\label{tab:teensy41_memory}
+\end{figure}
+
+\subsubsection{Règle fondamentale d'allocation : TCM versus DMA (OCRAM)}
+Une particularité matérielle capitale du Cortex-M7 de NXP réside dans la séparation physique des bus :
+\begin{itemize}
+    \item \textbf{DTCM (Accès CPU exclusif) :} La DTCM offre un débit maximal sans conflit avec les périphériques. C'est l'emplacement par défaut de la pile (\textit{stack}) et des variables globales non annotées. C'est ici que doivent résider les matrices du filtre de Kalman.
+    \item \textbf{Incompatibilité eDMA / DTCM :} Le contrôleur d'accès direct à la mémoire (\textbf{eDMA}) n'a \textbf{pas d'accès matériel à la DTCM}. Si un buffer de réception UART, SPI ou I2C géré par DMA est alloué sur la pile (donc en DTCM), le transfert DMA échoue silencieusement ou génère une faute de bus.
+    \item \textbf{Directive \texttt{DMAMEM} :} Tous les tampons de communication gérés en DMA (buffers de trames UWB, buffers de paquets SDIO pour la carte MicroSD) doivent impérativement être déclarés avec l'attribut \lstinline|DMAMEM| afin d'être logés dans l'\textbf{OCRAM} :
+\begin{lstlisting}
+DMAMEM static uint8_t sdio_log_buffer[32768]; // Alloue en OCRAM pour le DMA
+\end{lstlisting}
+    \item \textbf{Cohérence de Cache :} L'OCRAM étant couverte par le cache de données D-Cache, toute modification de buffer manipulé par le DMA nécessite un appel aux instructions de synchronisation (\lstinline|arm_dcache_flush()| ou \lstinline|arm_dcache_delete()|) pour garantir que le CPU et le contrôleur DMA lisent les données actualisées.
+\end{itemize}
+
+\subsection{Timers Matériels et Gestion Déterministe des Interruptions (NVIC)}
+
+Le processeur i.MXRT1062 dispose d'un contrôleur d'interruptions vectorisées imbriquées (\textbf{NVIC}) supportant jusqu'à 128 sources d'interruption avec \textbf{16 niveaux de priorité programmables} (de 0 = priorité maximale à 255 = priorité minimale, par pas de 16).
+
+\subsubsection{Gamme de Timers Disponibles}
+La carte offre plusieurs blocs de timers matériels indépendants :
+\begin{enumerate}
+    \item \textbf{Periodic Interrupt Timers (PIT) / \texttt{IntervalTimer} :}
+    Quatre canaux 32 bits cadencés sur l'horloge des périphériques ($24\,\text{MHz}$ ou $150\,\text{MHz}$). Dans l'environnement Teensyduino, ils sont manipulés via la classe \lstinline|IntervalTimer|. Ils génèrent des interruptions périodiques avec une gigue temporelle inférieure à $10\,\text{ns}$, idéales pour déclencher la boucle de prédiction IMU à $100\,\text{Hz}$ ou $200\,\text{Hz}$.
+    \item \textbf{General Purpose Timers (GPT) :}
+    Deux blocs de timers 32 bits avec pré-diviseur d'horloge 12 bits et registres de capture/comparaison. Utilisables pour l'horodatage absolu sans dérive.
+    \item \textbf{QuadTimers (TMR) :}
+    Quatre modules de 4 canaux de timers 16 bits très flexibles, capables de décoder des signaux en quadrature ou de mesurer des durées d'impulsions capteurs avec une résolution sub-microseconde.
+    \item \textbf{FlexPWM (Contrôle Moteur sans Gigue) :}
+    Quatre sous-modules dédiés à la génération de signaux PWM haute résolution. Contrairement à une modulation logicielle, le bloc FlexPWM génère les signaux de commande des ESC moteurs brushless et servomoteurs entièrement en silicium matériel, sans subir la moindre interruption CPU.
+\end{enumerate}
+
+\subsubsection{Hiérarchisation des Priorités d'Interruption pour le Dirigeable}
+Afin de garantir qu'une tâche de communication lente ne retarde jamais l'échantillonnage de l'état de vol, les priorités d'interruption sont configurées de façon stricte :
+\begin{itemize}
+    \item \textbf{Priorité 32 (Haute priorité) :} Interruption matérielle de l'IMU (\lstinline|H_INTN| du BNO085 sur broche externe). Traitement immédiat pour horodater la mesure à l'instant exact de son émission.
+    \item \textbf{Priorité 64 :} Interruption \lstinline|IntervalTimer| (PIT) déclenchant l'exécution de la boucle de prédiction EKF et de l'algorithme d'estimation de pose.
+    \item \textbf{Priorité 128 (Moyenne priorité) :} Interruptions de réception sur bus \texttt{Wire} (I2C) et UART (réception des trames UWB et GPS).
+    \item \textbf{Priorité 192 à 224 (Basse priorité) :} Écriture DMA sur carte MicroSD (en mode test) et transmission des paquets de télémétrie sol radio.
+\end{itemize}
+
+\subsection{Cartographie Complète des Broches et Périphériques Dédiés}
+
+La Teensy 4.1 expose 35 broches sur son pourtour principal et 20 broches additionnelles (pads CMS et connecteurs internes), toutes compatibles avec les niveaux logiques \textbf{3.3 V} (\textit{attention : entrées non tolérantes 5 V}).
+
+\begin{figure}[htbp]
+\centering
+\small
+\begin{tabular}{|l|c|l|p{6cm}|}
+\hline
+\textbf{Périphérique matériel} & \textbf{Broches Teensy 4.1} & \textbf{Protocole / Mode} & \textbf{Rôle dans le système du dirigeable} \\
+\hline
+\textbf{Bus \texttt{Wire} (I2C 0)} & 18 (SDA0), 19 (SCL0) & I2C Fast-Mode (400 kHz) & Bus principal : IMU BNO085 / CMPS12, Baromètre BMP581 \\
+\textbf{Bus \texttt{Wire1} (I2C 1)} & 16 (SCL1), 17 (SDA1) & I2C Fast-Mode (400 kHz) & Bus auxiliaire secondaire isolé pour capteurs expérimentaux \\
+\textbf{Port Série \texttt{Serial1}} & 0 (RX1), 1 (TX1) & UART 115200 / 921600 bauds & Réception des mesures de distance ToF / coordonnées UWB (DWM1001) \\
+\textbf{Port Série \texttt{Serial2}} & 7 (RX2), 8 (TX2) & UART 9600 / 115200 bauds & Réception des trames NMEA / UBX du récepteur GNSS (PA1616S) \\
+\textbf{Port Série \texttt{Serial3}} & 14 (TX3), 15 (RX3) & UART 57600 bauds & Émetteur-récepteur radio télémétrie sol (transceiver duplex) \\
+\textbf{Ligne \texttt{IMU\_INT}} & Broche 2 & Interruption externe (FALLING) & Ligne d'alerte \texttt{H\_INTN} du BNO085 (prêt à transférer) \\
+\textbf{Ligne \texttt{BARO\_INT}} & Broche 3 & Interruption externe (RISING) & Alerte seuil ou FIFO plein du BMP581 \\
+\textbf{Sorties PWM Moteurs} & Broches 4, 5, 6, 9 & FlexPWM 400 Hz / DShot & Signaux de commande vers les 4 variateurs électroniques (ESC) \\
+\textbf{Sorties Servomoteurs} & Broches 10, 11, 12 & PWM 50 Hz standard & Commande des gouvernes d'empennage (tangage / lacet) \\
+\textbf{Lecteur MicroSD Natif} & Port SDIO interne & Bus 4-bit SDIO @ 50 MHz & Enregistrement haute vitesse en séance de test ($> 20\,\text{Mo/s}$) \\
+\textbf{LED de Statut} & Broche 13 & Sortie logique standard & Témoin visuel de cadencement et codes d'erreur EKF \\
+\textbf{Port USB Device} & Connecteur Micro-B & USB 2.0 High-Speed (480 Mbps) & Programmation firmware, télémétrie filaire banc d'essai \\
+\hline
+\end{tabular}
+\caption{Cartographie détaillée de l'assignation des broches de la Teensy 4.1.}
+\label{tab:teensy41_pinout}
+\end{figure}
+
+\subsubsection{Interface SDIO Native 4-bit versus SPI}
+La Teensy 4.1 se distingue des microcontrôleurs traditionnels par son lecteur de carte MicroSD intégré directement connecté au contrôleur matériel \textbf{uSDHC} (\textit{Ultra Secured Digital Host Controller}) du processeur via un bus \textbf{SDIO 4 bits} :
+\begin{itemize}
+    \item \textbf{Débit réel :} Contrairement aux cartes Arduino ou microcontrôleurs utilisant une liaison SPI limitée à $1$ ou $2\,\text{Mo/s}$ avec un blocage continu du CPU, le bus SDIO 4 bits de la Teensy 4.1 fonctionne jusqu'à $50\,\text{MHz}$ et transfère les données par salves DMA jusqu'à $20\,\text{à }25\,\text{Mo/s}$.
+    \item \textbf{Sécurisation temps réel :} Grâce à la bibliothèque \lstinline|SdFat| optimisée pour Teensy, l'écriture s'effectue par blocs pré-alloués de $512$ octets en arrière-plan DMA. Toutefois, en raison des latences sporadiques d'effacement interne de la mémoire Flash NAND de la carte SD (pouvant atteindre $50\,\text{ms}$ à $100\,\text{ms}$ lors d'une réallocation de bloc), l'enregistrement SD est \textbf{désactivé par défaut en vol nominal} (\lstinline|ENABLE_SD_LOGGING = 0|) et réservé aux vols instrumentés d'étalonnage.
+\end{itemize}
+
+\subsection{Alimentation Électrique, Séparation des Masses et CEM}
+
+\subsubsection{Topologie d'Alimentation et Cavalier VUSB / VIN}
+La Teensy 4.1 peut être alimentée de deux manières :
+\begin{enumerate}
+    \item Par le connecteur Micro-USB ($5\,\text{V}$ fourni par l'ordinateur de développement).
+    \item Par la broche \texttt{VIN} ($3.6\,\text{V}$ à $5.5\,\text{V}$ régulé, fourni par un convertisseur continu-continu \textit{Battery Eliminator Circuit - BEC} dédié relié à la batterie de vol LiPo).
+\end{enumerate}
+\textbf{Précaution critique en phase de test :} Par défaut, les pastilles \texttt{VUSB} et \texttt{VIN} situées sous la carte sont reliées par une fine piste de cuivre. Lors des tests au sol avec le dirigeable alimenté par sa batterie et la Teensy connectée au PC en USB pour la visualisation, il y a un risque majeur de conflit d'alimentation et de réinjection de courant dans le port USB du PC. Il est impératif de \textbf{sectionner la piste entre les pastilles VUSB et VIN} au cutter, ce qui isole totalement l'alimentation USB de l'alimentation de bord tout en conservant les lignes de données D+ et D-.
+
+\subsubsection{Capacité du Régulateur 3.3 V Embarqué}
+La Teensy 4.1 intègre un régulateur abaisseur à très faible bruit capable de délivrer une tension de $3.3\,\text{V}$ aux capteurs externes connectés à ses broches \texttt{3.3V} :
+\begin{itemize}
+    \item Courant maximal disponible en sortie : environ $250\,\text{mA}$ disponibles pour l'électronique externe.
+    \item Bilan de consommation des capteurs du dirigeable :
+    \begin{equation}
+        I_{total\_capteurs} = \underbrace{15\,\text{mA}}_{\text{BNO085}} + \underbrace{0.1\,\text{mA}}_{\text{BMP581}} + \underbrace{25\,\text{mA}}_{\text{GPS}} \approx 40\,\text{mA}
+    \end{equation}
+    La marge de sécurité est très confortable ($> 80\%$), évitant la nécessité d'un régulateur $3.3\,\text{V}$ additionnel sur le PCB pour la chaîne d'instrumentation inertielle et barométrique.
+\end{itemize}
+
+\subsubsection{Bilan Énergétique Global et Fréquence CPU}
+La puissance absorbée par la Teensy 4.1 à pleine cadence ($600\,\text{MHz}$) est :
+\begin{equation}
+    P_{calculateur} = 3.3\,\text{V} \times 0.10\,\text{A} \approx 0.33\,\text{W}
+\end{equation}
+Comparée à la chaîne de propulsion du dirigeable (moteurs brushless consommant entre $20\,\text{W}$ et $150\,\text{W}$ selon la vitesse du vent et les manœuvres), la consommation du calculateur représente moins de \textbf{$0.5\%$ de la puissance globale}. Il est donc totalement contre-productif de vouloir sous-cadencer le processeur (par exemple à $150$ ou $300\,\text{MHz}$) pour économiser la batterie : maintenir la fréquence native de $600\,\text{MHz}$ garantit une réserve de temps de calcul maximale pour le filtre de Kalman et minimise la gigue temporelle sans impact mesurable sur l'autonomie de vol.
+
+\subsection{Sécurité Système : Chien de Garde Matériel (RTWDOG)}
+
+En vol autonome, un blocage logiciel (par exemple une boucle d'attente infinie sur un bus I2C défaillant) entraînerait la perte immédiate du contrôle du dirigeable. Le processeur i.MXRT1062 intègre un chien de garde matériel autonome (\textbf{RTWDOG3}) cadencé par son propre oscillateur RC basse fréquence indépendant ($32\,\text{kHz}$) :
+\begin{itemize}
+    \item \textbf{Configuration du délai d'expiration :} Le chien de garde est armé dès la fin de l'initialisation avec une période de temporisation calibrée à \textbf{$100\,\text{ms}$} (soit 10 à 20 cycles d'exécution EKF).
+    \item \textbf{Rafraîchissement périodique :} Le compteur est réarmé à la fin de chaque itération nominale de la boucle principale (\lstinline|loop()|).
+    \item \textbf{Action en cas de blocage :} Si le processeur reste bloqué pendant plus de $100\,\text{ms}$, le matériel déclenche un vecteur d'interruption non masquable (NMI) pour forcer une réinitialisation propre du contrôleur, tout en enregistrant le code d'incident dans un registre non volatile de maintien (\textit{System Reset Controller - SRC}) pour analyse ultérieure.
+\end{itemize}
+
+\end{document}

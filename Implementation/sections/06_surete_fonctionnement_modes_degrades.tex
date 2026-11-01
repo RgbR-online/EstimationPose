@@ -1,0 +1,124 @@
+\documentclass[../Implementation.tex]{subfiles}
+\begin{document}
+
+\section{Sûreté de Fonctionnement, Tolérance aux Fautes et Modes Dégradés}
+
+\subsection{Filtrage des Mesures Aberrantes par Porte de Validation \texorpdfstring{$\chi^2$}{Chi-2}}
+
+\subsubsection{Application numérique de la porte de Mahalanobis}
+La justification probabiliste formelle établissant que la distance de Mahalanobis normalisée $d_M^2 = y_k^T S_k^{-1} y_k$ suit une loi du $\chi^2(m)$ sous l'hypothèse gaussienne est rigoureusement démontrée dans le document \textbf{\texttt{Formulations\_Kalman.pdf}} (\textbf{Annexe B}).
+
+Dans le code embarqué de la Teensy 4.1, la porte de validation est mise en œuvre sous forme de constantes statiques pré-calculées (\lstinline|constexpr|), supprimant tout calcul d'intégrale de probabilité en vol :
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Voie capteur instrumentée} & \textbf{Dimension $m$} & \textbf{Seuil $\gamma$ (95\%)} & \textbf{Seuil $\gamma$ (99\%)} & \textbf{Seuil $\gamma$ (99.7\% - $3\sigma$)} \\
+\midrule
+Baromètre (Altitude scalaire $Z$) & 1 & 3.84 & 6.63 & \textbf{9.00} \\
+Boussole magnétique (Cap $\psi$) & 1 & 3.84 & 6.63 & \textbf{9.00} \\
+Position horizontale GNSS ($X, Y$) & 2 & 5.99 & 9.21 & \textbf{11.83} \\
+Position 3D UWB / Balises & 3 & 7.81 & 11.34 & \textbf{14.16} \\
+Accélération triaxiale corps & 3 & 7.81 & 11.34 & \textbf{14.16} \\
+\bottomrule
+\end{tabular}
+\caption{Table des seuils critiques $\gamma$ embarquée sous forme de constantes \lstinline|constexpr|.}
+\label{tab:seuils_gating_cpp}
+\end{table}
+
+\subsubsection{Automate de décision temps réel anti-divergence}
+L'algorithme de filtrage applique la règle de sélection suivante avant toute correction :
+\begin{enumerate}
+    \item \textbf{Calcul du résidu quadratique :} Pour une mesure scalaire ($m=1$), $d_M^2 = \frac{y^2}{S}$ (une division flottante). Pour un vecteur 3D ($m=3$), $d_M^2 = y^T S^{-1} y$ (résolution d'un système linéaire $3 \times 3$ par décomposition de Cholesky).
+    \item \textbf{Cas $d_M^2 \le \gamma$ (Mesure acceptée) :} L'innovation est validée. Le compteur d'anomalies consécutives est remis à zéro (\lstinline|N_reject = 0|), et la mise à jour de Kalman est appliquée.
+    \item \textbf{Cas $d_M^2 > \gamma$ (Mesure rejetée) :} L'échantillon est considéré comme corrompu par un aléa physique transitoire (réflexion radio parasite, masquage satellite, surpression sous hélice). La correction est ignorée, et le compteur s'incrémente : \lstinline|N_reject++|.
+    \item \textbf{Mécanisme de verrouillage anti-blocage :} Si le nombre de rejets consécutifs atteint un seuil limite (\lstinline|N_reject >= 5| consécutifs sur la même voie), l'observateur considère qu'il ne s'agit plus d'un parasite mais d'un changement d'état physique réel du dirigeable (par exemple une manœuvre brutale ayant dépassé l'incertitude du modèle). Le filtre force alors l'acceptation de la mesure pour recoller au réel et éviter la divergence permanente.
+\end{enumerate}
+
+\subsection{Surveillance Temporelle et Watchdog Sensoriel}
+
+\subsubsection{Détection automatique de perte de signal}
+Pour prévenir le figeage du filtre lors de la perte physique d'un capteur, un chien de garde logiciel (\textit{Software Watchdog}) horodate chaque trame reçue :
+\begin{equation}
+    \Delta t_{silence}^{(s)} = t_{courant} - t_{last}^{(s)}
+\end{equation}
+Si le silence d'un capteur dépasse son seuil d'expiration calibré $\tau_{timeout}^{(s)}$ (paramétré typiquement à 4 fois la période nominale du composant, soit $200\,\text{ms}$ pour un capteur à $20\,\text{Hz}$) :
+\begin{enumerate}
+    \item Le bit de validité correspondant dans le registre d'état de santé (\textit{Sensor Health Bitmask}) est basculé à 0.
+    \item Les appels aux fonctions de correction associées à ce capteur sont immédiatement suspendus.
+    \item La matrice de covariance $P$ continue de croître naturellement au rythme de la prédiction, traduisant fidèlement l'accroissement de l'incertitude d'état en l'absence de mesure de recalage.
+\end{enumerate}
+
+\subsection{Résilience Matérielle du Bus I2C et Déblocage Automatique (\textit{Bus Hang Recovery})}
+
+Sur un réseau de capteurs I2C partagé (BNO085, BMP581, CMPS12, GPS), un parasite électromagnétique ou une micro-coupure de ligne peut figer un esclave pendant qu'il maintient la ligne SDA à l'état bas (envoi d'un bit d'acquittement ACK). 
+
+Dans les bibliothèques Arduino conventionnelles, cet incident fige le microcontrôleur dans une boucle d'attente infinie non-bloquable, interrompant instantanément la commande des moteurs et provoquant le crash du dirigeable.
+
+Pour garantir la survie du système en vol, deux sécurités logicielles et matérielles sont armées :
+\begin{enumerate}
+    \item \textbf{Timeout matériel non-bloquant du bus I2C :} 
+    Dans le \lstinline|setup()|, la temporisation d'échappement matériel de Teensyduino est activée :
+\begin{lstlisting}
+Wire.setTimeOut(25000); // Timeout a 25 ms avec code d'erreur non-bloquant
+\end{lstlisting}
+    \item \textbf{Routine de déblocage automatique par 9 impulsions d'horloge (\textit{9-Clock Recovery}) :} 
+    Si une transaction I2C signale un timeout persistant, la Teensy 4.1 reconfigure temporairement les broches SCL et SDA en sorties GPIO standards, injecte un train de 9 impulsions d'horloge sur SCL pour forcer le registre à décalage de l'esclave à relâcher SDA, puis réinitialise le périphérique matériel :
+\begin{lstlisting}
+void recoverI2CBus() {
+    pinMode(PIN_SCL, OUTPUT);
+    for (int i = 0; i < 9; i++) {
+        digitalWrite(PIN_SCL, HIGH); delayMicroseconds(5);
+        digitalWrite(PIN_SCL, LOW);  delayMicroseconds(5);
+    }
+    Wire.begin();
+    Wire.setClock(400000);
+}
+\end{lstlisting}
+\end{enumerate}
+
+\subsection{Surveillance de l'État et Reprise à Chaud sans Redémarrage CPU (\textit{Soft Reset})}
+
+\subsubsection{Détection continue d'anomalie arithmétique}
+À chaque pas d'exécution, la cohérence arithmétique du vecteur d'état et de la covariance est validée en temps constant :
+\begin{lstlisting}
+bool state_is_valid = !isnan(state.x) && !isnan(state.qw) && (P.trace() < 1e5f);
+\end{lstlisting}
+
+\subsubsection{Principe d'interdiction du redémarrage matériel en vol}
+Contrairement à un robot terrestre, le redémarrage matériel d'un microcontrôleur en vol (\textit{Hardware Watchdog Reboot}) couperait les impulsions PWM vers les variateurs des moteurs pendant environ $1.5\,\text{seconde}$. Cette rupture de commande entraînerait une déstabilisation aérodynamique irréversible du dirigeable.
+
+\subsubsection{Procédure de reprise à chaud (\textit{Soft Reset})}
+Si une valeur non numérique (\lstinline|NaN|) ou une trace de covariance anormale est identifiée :
+\begin{enumerate}
+    \item Les impulsions de commande des moteurs brushless sont maintenues actives en mode de poussée stabilisée dégradée.
+    \item Le vecteur d'état $\hat{x}$ est réassigné instantanément à partir des dernières mesures valides des capteurs bruts (position absolue, altitude barométrique et cap magnétique).
+    \item La matrice de covariance est réinitialisée à sa valeur initiale $P_0$.
+    \item L'incident est immédiatement signalé par le motif d'alerte de la LED 13 et transmis à la station sol par télémétrie.
+\end{enumerate}
+
+\subsection{Signalement Diagnostique Hiérarchisé par la LED 13}
+
+Le microcontrôleur Teensy 4.1 dispose d'une LED de statut intégrée sur la broche 13. Afin d'offrir un diagnostic visuel sans équivoque à l'opérateur au sol, la LED est pilotée par une machine à états finis non-bloquante (\textit{FSM}) cadencée dans la boucle principale.
+
+Pour garantir une lisibilité immédiate lors des essais au sol même en présence de défaillances multiples, les alertes sont rigoureusement hiérarchisées :
+\begin{itemize}
+    \item \textbf{Priorité 1 — Défaut critique (Centrale IMU primaire défaillante) :}
+    La perte de l'IMU interdisant toute propagation cinématique fiable, ce motif préempte instantanément tous les autres signaux : clignotement rapide ininterrompu à $5\,\text{Hz}$.
+    \item \textbf{Priorité 2 — Défauts secondaires (Capteurs de correction périphériques) :}
+    Si l'IMU est saine mais qu'un ou plusieurs capteurs de correction sont absents, la LED émet des salves d'impulsions distinctes séparées par une pause de $2$ secondes :
+    \begin{itemize}
+        \item 2 flashs brefs : Perte de la liaison télémétrique sol.
+        \item 3 flashs brefs : Décrochage du baromètre BMP581.
+        \item 4 flashs brefs : Perte du signal UWB (DWM1001) ou GNSS (PA1616S).
+        \item 5 flashs brefs : Défaut du magnétomètre / CMPS12.
+    \end{itemize}
+    Si plusieurs défauts secondaires coexistent, l'automate fait défiler cycliquement leurs codes respectifs.
+    \item \textbf{Priorité 3 — État nominal de vol :}
+    En fonctionnement régulier sans anomalie, la LED émet un flash bref toutes les secondes (\textit{Heartbeat}), attestant du bon déroulement de la boucle temps réel.
+\end{itemize}
+
+\end{document}
+

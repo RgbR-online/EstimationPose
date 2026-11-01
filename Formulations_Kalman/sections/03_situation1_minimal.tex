@@ -1,0 +1,121 @@
+\documentclass[../Formulations_Kalman.tex]{subfiles}
+\begin{document}
+
+\subsection{Situation 1 : Modèle cinématique minimal}
+Cette configuration constitue le modèle de référence minimal. L'évolution de la position et de l'attitude y est modélisée au premier ordre (supposée constante en prédiction, réactualisée directement par les capteurs lors de la phase de correction). Les deux formulations mathématiques (Angles d'Euler et Quaternions) sont détaillées ci-après afin d'établir une comparaison rigoureuse.
+
+\subsubsection{Variante A : Formulation en Angles d'Euler}
+
+\paragraph{Vecteur d'état et de mesure :}
+Le vecteur d'état $\hat{x}_{k\mid k}$ est de dimension 6 (position et attitude globale) et le vecteur de mesure $z_{k+1}$ est de dimension 7 :
+\begin{align}
+\hat{x} &= \begin{bmatrix} X & Y & Z & \phi & \theta & \psi \end{bmatrix}^T \\
+z_{k+1} &= \begin{bmatrix} X_{\text{pos}} & Y_{\text{pos}} & Z_{\text{pos}} & \phi_{imu} & \theta_{imu} & \psi_{imu} & Z_{baro} \end{bmatrix}^T
+\end{align}
+où $[X_{\text{pos}}, Y_{\text{pos}}, Z_{\text{pos}}]^T$ désigne la mesure de position absolue fournie soit par l'UWB ($[X_{\text{uwb}}, Y_{\text{uwb}}, Z_{\text{uwb}}]^T$), soit par le GPS après projection cartésienne locale ($[X_{\text{enu}}, Y_{\text{enu}}, Z_{\text{enu}}]^T$).
+
+\paragraph{Modèle de prédiction et Jacobienne $F_k$ :}
+En l'absence de variables de vitesse ou de mesures gyrométriques, la position et l'attitude sont supposées stationnaires au cours du pas de prédiction $dt$ :
+\begin{equation}
+\hat{x}_{k+1\mid k} = \hat{x}_{k\mid k} \implies F_k = \frac{\partial f}{\partial x}\bigg|_{\hat{x}_{k\mid k}} = I_6
+\end{equation}
+
+\paragraph{Bruit de processus $Q_k$ (Taille $6 \times 6$) :}
+L'incertitude sur la dynamique globale (marche aléatoire directe) est modélisée par une matrice diagonale :
+\begin{equation}
+Q_k = \begin{bmatrix}
+dt \cdot \text{diag}(\sigma_{\text{pos}}^2) & 0_{3\times3} \\
+0_{3\times3} & dt \cdot \text{diag}(\sigma_{\text{att}}^2)
+\end{bmatrix}
+\end{equation}
+avec $\sigma_{\text{pos}}^2 = [\sigma_{x}^2, \sigma_{y}^2, \sigma_{z}^2]^T$ et $\sigma_{\text{att}}^2 = [\sigma_{\phi}^2, \sigma_{\theta}^2, \sigma_{\psi}^2]^T$.
+
+\paragraph{Matrice d'observation $H_{k+1}$ (Taille $7 \times 6$) et repliement angulaire :}
+Grâce aux corrections de bras de levier déportées en amont ($R_{b \to \text{nav}} \mathbf{r}^b$), la matrice $H_{k+1}$ conserve une formulation linéaire, constante et creuse :
+\begin{equation}
+H_{k+1} = \begin{bmatrix}
+I_3 & 0_{3\times3} \\
+0_{3\times3} & I_3 \\
+\begin{matrix} 0 & 0 & 1 \end{matrix} & \begin{matrix} 0 & 0 & 0 \end{matrix}
+\end{bmatrix}
+\end{equation}
+\textbf{Point de vigilance spécifique à la formulation Euler :} Lors du calcul de l'innovation $y_{k+1} = z_{k+1} - H_{k+1}\hat{x}_{k+1\mid k}$, la composante de lacet $\psi$ doit impérativement subir un repliement angulaire modulo $2\pi$ :
+\begin{equation}
+y_{k+1}[\psi] = \text{atan2}\left(\sin(z_{\psi} - \hat{\psi}_{k+1\mid k}), \; \cos(z_{\psi} - \hat{\psi}_{k+1\mid k})\right)
+\end{equation}
+afin d'éviter les divergences d'innovation lors des passages par le Nord ($359.9^\circ \leftrightarrow 0.1^\circ$).
+
+\paragraph{Matrice de bruit de mesure $R_{k+1}$ (Taille $7 \times 7$) :}
+\begin{equation}
+R_{k+1} = \text{diag}(\sigma_{X,\text{pos}}^2, \sigma_{Y,\text{pos}}^2, \sigma_{Z,\text{pos}}^2, \sigma_{\phi,imu}^2, \sigma_{\theta,imu}^2, \sigma_{\psi,imu}^2, \sigma_{baro}^2)
+\end{equation}
+
+---
+
+\subsubsection{Variante B : Formulation en Quaternions d'erreur (ESKF)}
+
+\paragraph{Vecteurs d'état nominal et d'état d'erreur :}
+Dans l'approche ESKF, l'état se scinde en un état nominal à 7 dimensions et un état d'erreur minimal à 6 dimensions :
+\begin{align}
+\hat{x}_{\text{nom}} &= \begin{bmatrix} X & Y & Z & q_w & q_x & q_y & q_z \end{bmatrix}^T \quad (\dim = 7, \; \|q\|=1) \\
+\delta x &= \begin{bmatrix} \delta X & \delta Y & \delta Z & \delta\theta_x & \delta\theta_y & \delta\theta_z \end{bmatrix}^T \quad (\dim = 6)
+\end{align}
+où $\delta\boldsymbol{\theta} = [\delta\theta_x, \delta\theta_y, \delta\theta_z]^T$ représente l'écart angulaire tridimensionnel local.
+
+\paragraph{Modèle de prédiction :}
+L'état nominal est stationnaire : $\hat{x}_{\text{nom}, k+1\mid k} = \hat{x}_{\text{nom}, k\mid k}$.
+La matrice de transition pour l'état d'erreur est l'identité pure :
+\begin{equation}
+F_{\delta, k} = I_6, \quad P_{k+1\mid k} = P_{k\mid k} + Q_k
+\end{equation}
+avec la même matrice $Q_k$ de dimension $6 \times 6$ que dans la Variante A.
+
+\paragraph{Vecteur de mesure et calcul de l'innovation résiduelle :}
+Le vecteur de mesure $z_{k+1}$ comprend la position absolue, l'attitude mesurée $q_m$ et la pression barométrique :
+\begin{itemize}
+    \item Si le capteur est l'\textbf{Adafruit BNO085} : le quaternion $q_m$ est directement fourni par le capteur.
+    \item Si le capteur est le \textbf{CMPS12} : le triplet $(\phi_{imu}, \theta_{imu}, \psi_{imu})$ est converti en amont en quaternion $q_m$ par la formule analytique.
+\end{itemize}
+L'écart d'attitude entre la mesure $q_m$ et la prédiction nominale $\hat{q}_{k+1\mid k}$ s'évalue via le quaternion d'erreur de mesure :
+\begin{equation}
+\delta q_m = \hat{q}_{k+1\mid k}^* \otimes q_m \approx \begin{bmatrix} 1 \\ \frac{1}{2} \delta\boldsymbol{\theta}_m \end{bmatrix}
+\end{equation}
+L'innovation globale $y_{k+1}$ s'écrit alors sans aucune fonction trigonométrique ni repliement de cap :
+\begin{equation}
+y_{k+1} = \begin{bmatrix}
+\mathbf{p}_{\text{pos}} - \hat{\mathbf{p}}_{k+1\mid k} \\
+2 \cdot \delta\mathbf{q}_{m, v} \\
+Z_{baro} - \hat{Z}_{k+1\mid k}
+\end{bmatrix} \in \mathbb{R}^7
+\end{equation}
+où $\delta\mathbf{q}_{m, v}$ désigne les trois composantes vectorielles de $\delta q_m$.
+
+\paragraph{Matrice d'observation de l'erreur $H_{\delta, k+1}$ (Taille $7 \times 6$) :}
+Comme $\delta\boldsymbol{\theta}_m \approx \delta\boldsymbol{\theta}$, la matrice d'observation reliant l'innovation $y_{k+1}$ au vecteur d'erreur $\delta x$ conserve la forme linéaire élémentaire :
+\begin{equation}
+H_{\delta, k+1} = \begin{bmatrix}
+I_3 & 0_{3\times3} \\
+0_{3\times3} & I_3 \\
+\begin{matrix} 0 & 0 & 1 \end{matrix} & \begin{matrix} 0 & 0 & 0 \end{matrix}
+\end{bmatrix}
+\end{equation}
+
+\paragraph{Correction et réinjection de l'erreur (Reset) :}
+Le gain de Kalman $K_{k+1} = P_{k+1\mid k} H_\delta^T (H_\delta P_{k+1\mid k} H_\delta^T + R_{k+1})^{-1}$ fournit l'estimation de l'erreur $\delta\hat{x} = K_{k+1} y_{k+1}$.
+La mise à jour de l'état nominal s'exécute par :
+\begin{align}
+\hat{\mathbf{p}}_{k+1\mid k+1} &= \hat{\mathbf{p}}_{k+1\mid k} + \delta\hat{\mathbf{p}} \\
+\hat{q}_{k+1\mid k+1} &= \hat{q}_{k+1\mid k} \otimes \begin{bmatrix} 1 \\ \frac{1}{2}\delta\hat{\boldsymbol{\theta}} \end{bmatrix}, \quad \text{puis normalisation } \hat{q}_{k+1\mid k+1} \leftarrow \frac{\hat{q}_{k+1\mid k+1}}{\|\hat{q}_{k+1\mid k+1}\|}
+\end{align}
+La covariance est mise à jour par $P_{k+1\mid k+1} = (I_6 - K_{k+1} H_\delta) P_{k+1\mid k}$, et l'état d'erreur est réinitialisé ($\delta\hat{x} \leftarrow 0$).
+
+---
+
+\subsubsection{Synthèse et recommandation pour la Situation 1}
+\begin{itemize}
+    \item \textbf{Avec le CMPS12 :} La \textbf{Variante A (Angles d'Euler)} est rigoureusement recommandée. En l'absence de gyroscopes, $F_k = I_6$ est strictement linéaire et ne présente aucun calcul trigonométrique lourd. Convertir les angles d'Euler en quaternions pour revenir ensuite aux angles d'Euler pour l'asservissement rajouterait une couche de calcul inutile sans aucun gain algorithmique.
+    \item \textbf{Avec l'Adafruit BNO085 :} Si le capteur fournit nativement le quaternion, la Variante B est élégante, mais convertir la mesure en Euler à la réception pour exploiter la Variante A reste également très performant et simplifie la lecture de l'état par l'équipe de pilotage.
+\end{itemize}
+
+\end{document}
+
