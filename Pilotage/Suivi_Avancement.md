@@ -15,7 +15,7 @@
 
 | Paquet | État | Date | Point de reprise | Note de passation | Jalon | Commit |
 |---|---|---|---|---|---|---|
-| `1.1` | `terminé` | 2026-11-01 | `C1.1` | `[C1.1](../Passations/C1.1.md)` | `J1` | — |
+| `1.1` | `terminé` | 2026-11-01 | `C1.1` | `[C1.1](../Passations/C1.1.md)` | `J1` | `0dc0d40` |
 | `1.2` | `à faire` | — | `C1.2` | — | — | — |
 | `1.3` | `à faire` | — | `C1.3` | — | `J2` | — |
 | `2.1` | `à faire` | — | `C2.1` | — | — | — |
