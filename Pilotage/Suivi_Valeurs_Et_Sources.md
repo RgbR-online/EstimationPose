@@ -107,10 +107,11 @@ document d'étape, le code et la note de passation.
 
 > **Amorçage.** Les lignes ci-dessous reprennent les marqueurs `À définir` / `à vérifier`
 > déjà présents dans [`Reference_Technique_Etape_1_Capteurs.md`](./Reference_Technique_Etape_1_Capteurs.md)
-> (§0, §1.3 bloc 4, §1.7.1, §3.4, Annexe A) et §7. Les niveaux, impacts et échéances sont
-> des **propositions** : les corriger ne demande aucune modification du document d'étape.
-> Une ligne ouverte ne signifie pas que le doute est confirmé ; elle signifie qu'il n'est
-> pas clos.
+> (§0, §1.3 bloc 4, §1.7.1, §3.4, Annexe A) et §7. Les lignes `V-2-02` à `V-2-15`
+> proviennent du document de référence de l'étape 2 (§0.4), créé le 2026-11-01. Les niveaux,
+> impacts et échéances sont des **propositions** : les corriger ne demande aucune
+> modification du document d'étape. Une ligne ouverte ne signifie pas que le doute est
+> confirmé ; elle signifie qu'il n'est pas clos.
 
 | ID | Type de tâche | Valeur par défaut retenue | Emplacement | Provenance · niveau | Impact | Juge de paix · complément | Échéance | Statut |
 |---|---|---|---|---|---|---|---|---|
@@ -123,9 +124,32 @@ document d'étape, le code et la note de passation.
 | `V-1-07` | Brochage / port série | trame canonique sur `Serial8`, broches non définies | bloc 4, §1.7.1 | `AGENT` · **D**, 40 % | majeur | schéma `ELEC` + recherche d'UART libres sur la carte Teensy | `M0b` | `par défaut` |
 | `V-1-08` | Brochage / port série | sortie RGB sur 41/39/40, réservée | bloc 4, §1.3.3 | `DS:Materiel §5.4` (LED 13 seule) · **D**, 40 % | mineur | schéma `ELEC` · fonction réservée, non implémentée | `M0a` | `par défaut` |
 | `V-1-09` | Session / entrées | `CAP_SESSION_BOUTON_PIN = -1` | bloc 13 | `AGENT` · **D**, 30 % | mineur | décision matérielle + schéma `ELEC` · équivalent DEV disponible | `M4` | `par défaut` |
-| `V-1-10` | Paramètres capteur (ODR) | `BMP581_ODR_CODE = 0xFF` (sentinelle) | bloc 6, Annexe A | `DS:table ODR non recopiée` · **D**, 50 % | bloquant | table ODR → Hz de la fiche + mesure de cadence réelle (paquet `1.3`) | `M2` | `par défaut` |
+| `V-1-10` | Paramètres capteur (ODR) | `BMP581_ODR_CODE = 0xFF` (sentinelle) | bloc 6, Annexe A | `DS:table ODR non recopiée` · **D**, 50 % | bloquant | table ODR → Hz de la fiche + mesure de cadence réelle (paquet `1.3`) | `C1.3` (report : campagne de caractérisation, décision du 2026-11-01) | `par défaut` |
 | `V-1-11` | Paramètres capteur (registres) | carte des registres BMP581 : `CHIP_ID` 0x01/0x50, `STATUS` 0x27, données 0x20–0x25, `CMD` 0x7E | doc étape §3.4 | `DS:BST-BMP581` · **D**, 60 % (table à valider en bloc) | bloquant | relecture ciblée de la fiche + lecture réelle des registres sur banc | `M0a` | `à vérifier` |
 | `V-2-01` | Formulation / modèle Kalman | quaternion scalaire en premier, passage corps → terre | étape 1 §7 (contrat) | `KAL:Formulations_Kalman §2.2.1 et §2.2.4` · **C**, 80 % | bloquant | test analytique + invariants numériques + référence hôte (`bench/test_kalman/reference/`) | `C2.1` | `à vérifier` |
+| `V-2-02` | Constante physique | `g = 9,80665 m/s²` (axe Z vers le haut) | `FilterConfig.h` bloc 2 (`FILTER_G`) | `AGENT` (aucune valeur dans `Formulations_Kalman` ni `Implementation`) · **D**, 40 % | majeur | mesure de ‖f‖ au repos sur banc (`MES`) + comparaison à la valeur configurée · alternative `9,81` | `C2.1` | `à vérifier` |
+| `V-2-03` | Bruit / covariance | σ (jerk, accélération angulaire, bruits de mesure) et `R` | `FilterConfig.h` blocs 3 et 4 | `KAL:Formulations_Kalman §2.5.3, §2.5.5` + paquet `1.3` **non produit** · **D**, 30 % | bloquant | jeu de données du paquet `1.3` + NIS moyen ≈ m sur rejeu de données statiques | `C2.1` | `à vérifier` |
+| `V-2-04` | Bruit / covariance | `P0` : σ_p, σ_v, σ_att, σ_ω, σ_a, σ_b | `FilterConfig.h` bloc 5 | `IMPL:Implementation §3.3` (bloc « σ_bias,0² I6 » = états ω et a, cf. écart `E-2-07` de l'étape 2) · **C**, 80 % | majeur | scénario de convergence + référence hôte | `C2.1` | `à vérifier` |
+| `V-2-05` | Garde-fou | `FILTER_TILT_MAX_RAD = 60°` | `FilterConfig.h` bloc 3 | `AGENT` (aucune borne dans les sources ; tangage de l'ordre de `25°` documenté en vol) · **D**, 40 % | majeur | scénario `θ → 90°` sur hôte | `C2.1` | `à vérifier` |
+| `V-2-06` | Garde-fou | `FILTER_DT_MAX_US = 200000` | `FilterConfig.h` bloc 3 | `IMPL:Implementation §6.2.1` (4 × période nominale) · **D**, 50 % | majeur | scénario de trou de données sur hôte | `C2.1` | `à vérifier` |
+| `V-2-07` | Garde-fou | `gate_alpha = 1e-3`, `K_GATE_INFLATE = 100`, `N_REJECT_MAX = 5` | `FilterConfig.h` bloc 6 | `KAL:Formulations_Kalman annexe B` + `IMPL:Implementation §6.1.2` · **C**, 90 % pour `5` ; **D**, 50 % pour le reste | majeur | taux de faux rejets mesuré sur données `1.3` + scénario de biais persistant | `C2.1` | `à vérifier` |
+| `V-2-08` | Garde-fou | `FILTER_TRACE_MAX = 1e5` | `FilterConfig.h` bloc 3 | `IMPL:Implementation §6.4.1` · **D**, 40 % (seuil dépendant des unités) | majeur | mesure de `trace(P)` sur données réelles + scénario de divergence | `C2.1` | `à vérifier` |
+| `V-2-09` | Alignement | `R_imu→body = I`, `Δψ_earth→nav = 0` | `BenchConfig.h` (banc), puis adaptateurs du firmware en `3.1` | `AGENT` (procédure `IMPL:Implementation §3.3`, valeurs non mesurées) · **D**, 30 % | majeur | procédure d'alignement au sol + schéma `ELEC` | `C2.2` | `à vérifier` |
+| `V-2-10` | Bruit / covariance | `k_z = 1,5`, `σ_uwb,xy = 0,10 m`, `τ_uwb = 30 ms` | `FilterConfig.h` bloc 4 ; `BenchConfig.h` (`TAU_UWB`) | `KAL:Formulations_Kalman §2.3.1, §2.3.5` + `IMPL:Implementation §2.4` · **C**, 80 % | majeur | caractérisation du paquet `1.3` + test à vitesse constante | `C2.1` | `à vérifier` |
+| `V-2-11` | Bruit / covariance | `σ²_xy = σ²/C_k`, `σ²_z = (k_z·σ)²/C_k` | code de `updateUWB()` | `KAL:Formulations_Kalman §2.3.5` · **C**, 90 % (forme) ; **D**, 50 % (bornes de `C_k`) | majeur | jeu de données UWB du paquet `1.3` (métadonnées de confiance) | `C2.1` | `à vérifier` |
+| `V-2-12` | Reproductibilité | `platform = teensy@5.1.0` ; Eigen épinglé | `bench/test_kalman/platformio.ini`, `lib/kalman/library.json` | `MES:environnement local (.platformio), 2026-11-01` · **B**, 95 % (plateforme) ; Eigen · **D**, 20 % | mineur | `pio pkg list` + build propre reproductible hôte et `teensy41` | `N0` | `à vérifier` |
+| `V-2-13` | Tolérances hôte/cible | table `reference/tolerances.csv` (annexe C de l'étape 2) | `bench/test_kalman/reference/tolerances.csv` | `AGENT` · **D**, 40 % | majeur | distribution des écarts mesurés sur les références (quantile 99,9 %), figée en `2.2` | `C2.2` | `à vérifier` |
+| `V-2-14` | Bruit / covariance | `k_env = 2,0` dans `[1,5 ; 3,0]` | `FilterConfig.h` bloc 4 | `IMPL:Implementation §2.3` · **C**, 90 % (intervalle) ; **D**, 50 % (point) | mineur | comparaison des innovations en vol instrumenté (`3.3`) | `C3.3` | `à vérifier` |
+| `V-2-15` | Observabilité | gel de `b_baro` sans `Z` absolu (drapeau `has_abs_z`) | code de `updateBaro()` + `FilterConfig.h` bloc 6 | `KAL:Formulations_Kalman §2.6.4` (séparation fréquentielle) · **C**, 85 % | majeur | scénario sans UWB (Situation 3) sur hôte | `C2.1` | `à vérifier` |
+
+> **2026-11-01** — suite à la clôture du paquet `1.1` et à la validation du jalon `J1`
+> (décision humaine consignée dans [`../Passations/C1.1.md`](../Passations/C1.1.md)), les
+> mesures statistiques (σ, bruits) et la fréquence de mesure maximale prévues par les
+> jalons internes `M1`/`M2` du paquet `1.1` sont **reportées** à la campagne de
+> caractérisation métrologique du paquet `1.3` : les échéances associées sont recalées
+> en conséquence (voir `V-1-10`). Les lignes `V-1-*` restent ouvertes : la validation
+> qualitative sur Teensy 4.1 réelle constitue une preuve fonctionnelle, pas une clôture
+> de doute (procédures de juge de paix non exécutées).
 
 ### 3.1 Lecture d'une ligne
 

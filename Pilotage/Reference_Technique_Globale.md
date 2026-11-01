@@ -34,7 +34,7 @@ contenu.
 | Étape | Document de référence détaillé | Statut | Contenu couvert |
 |---|---|---|---|
 | `1` | [`Reference_Technique_Etape_1_Capteurs.md`](./Reference_Technique_Etape_1_Capteurs.md) | **Rédigé** | Paquets `1.1` à `1.3`, configuration `CapteursConfig.h`, capteurs, contrats d'interface (§7), annexes de squelettes (A, B, C) |
-| `2` | `Reference_Technique_Etape_2_Kalman.md` | *À produire au démarrage du paquet `2.1`* | Noyau du filtre, `FilterConfig`, types de filtre, banc hôte et banc autonome sur cible |
+| `2` | [`Reference_Technique_Etape_2_Kalman.md`](./Reference_Technique_Etape_2_Kalman.md) | **Rédigé** | Noyau du filtre, `FilterConfig`, types de filtre, banc hôte et banc autonome sur cible |
 | `3` | `Reference_Technique_Etape_3_Integration.md` | *À produire au démarrage du paquet `3.1`* | Intégration PlatformIO, câblage acquisition → filtre → asservissement, tests sur cible |
 | `4` | `Reference_Technique_Etape_4_Temps_Reel.md` | *À produire au démarrage du paquet `4.1`* | Ordonnancement, horodatage, priorités |
 | `5` | `Reference_Technique_Etape_5_Profilage.md` | *À produire au démarrage du paquet `5.1`* | Budgets temps, mémoire, latence |
@@ -385,8 +385,13 @@ toute broche d'interruption ; toute modification du firmware.
 
 **Objectif :** valider le filtre comme composant autonome, sans firmware : validation d'abord sur hôte, puis sur cible via un banc PlatformIO autonome, sans intégration au dépôt global.
 
-**Détail d'implémentation :** `Reference_Technique_Etape_2_Kalman.md` *(à produire au
-démarrage du paquet `2.1`)*.
+**Détail d'implémentation :**
+[`Reference_Technique_Etape_2_Kalman.md`](./Reference_Technique_Etape_2_Kalman.md)
+(noyau `lib/kalman/`, `FilterConfig`, types et dimensions, blocs d'observation, invariants,
+banc hôte et banc cible ; variante écartées :
+[`Annexe_Variantes_Et_Historique_Etape_2.md`](./Annexes/Annexe_Variantes_Et_Historique_Etape_2.md)).
+En cas de divergence sur le détail, ce document d'étape fait foi. Les blocs « Organisation
+du dépôt » de ses paquets y ont été **transférés** (§2.2, règle 7).
 
 <a id="paquet-2-1"></a>
 ### Paquet 2.1 — Validation indépendante du filtre
@@ -452,16 +457,9 @@ types d'estimation figés.
 - l'API publique est stable et documentée ;
 - le filtre ne dépend ni d'Arduino, ni du firmware, ni d'un pilote matériel.
 
-**Organisation du dépôt :**
-
-| Créé | Modifié | Inchangé |
-|---|---|---|
-| `lib/kalman/` : noyau pur, `FilterConfig`, types d'état, API de prédiction et de correction | `README.md` pour la procédure de rejeu hôte | `src/`, `include/`, `main/` du firmware |
-| `bench/test_kalman/` : `platformio.ini` avec environnement natif (hôte) et environnement cible en **compilation seule** (portabilité, sans exécution) ; programme de rejeu piloté par le `tMicros` des jeux de données `1.3` | `.gitignore` pour les jeux volumineux | `platformio.ini` racine |
-| `bench/test_kalman/README.md` : procédure de rejeu hôte | | |
-| `bench/test_kalman/reference/` : références hôte (format et précision figés) et tolérances, entrée du paquet `2.2` | | |
-| Tests unitaires et scénarios de validation dans `lib/kalman/test/` | | `commun/` |
-| Rapport de validation du filtre | | |
+**Organisation du dépôt :** transférée au
+[`Reference_Technique_Etape_2_Kalman.md`](./Reference_Technique_Etape_2_Kalman.md) §1.7
+(règle 7 du §2.2).
 
 **Point de reprise :** `C2.1`
 
@@ -502,14 +500,10 @@ publique du filtre.
 - aucun code de la bibliothèque n'est dupliqué dans le banc ;
 - la validation n'utilise que des données rejouées : capteurs réels, modes dégradés et intégration au firmware restent dans `3.3`.
 
-**Organisation du dépôt :**
-
-| Créé | Modifié | Inchangé |
-|---|---|---|
-| Environnement cible **exécutable** de `bench/test_kalman/` (même source, sélection par macro) | `bench/test_kalman/platformio.ini` : ajout de l'environnement cible exécutable | `lib/kalman/` : source unique, aucune copie |
-| `bench/test_kalman/scripts/` : comparaison hôte/cible aux `bench/test_kalman/reference/` avec les tolérances de `2.1` | `bench/test_kalman/README.md` : section rejeu sur cible et interprétation des écarts | `src/`, `include/`, `main/` du firmware |
-| Rapport de validation matérielle (comparaison hôte/cible) | | `src/`, `include/`, `main/` du firmware |
-| | | `platformio.ini` racine, `commun/` |
+**Organisation du dépôt :** transférée au
+[`Reference_Technique_Etape_2_Kalman.md`](./Reference_Technique_Etape_2_Kalman.md) §1.7
+(règle 7 du §2.2) ; la ligne « `src/`, `include/`, `main/` du firmware » du tableau d'origine,
+qui était dupliquée, y est consolidée.
 
 **Point de reprise :** `C2.2`  
 **Jalon associé :** `J3`

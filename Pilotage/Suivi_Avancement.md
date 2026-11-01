@@ -15,7 +15,7 @@
 
 | Paquet | État | Date | Point de reprise | Note de passation | Jalon | Commit |
 |---|---|---|---|---|---|---|
-| `1.1` | `à faire` | — | `C1.1` | — | `J1` | — |
+| `1.1` | `terminé` | 2026-11-01 | `C1.1` | `[C1.1](../Passations/C1.1.md)` | `J1` | — |
 | `1.2` | `à faire` | — | `C1.2` | — | — | — |
 | `1.3` | `à faire` | — | `C1.3` | — | `J2` | — |
 | `2.1` | `à faire` | — | `C2.1` | — | — | — |
@@ -37,15 +37,26 @@ Colonnes : `Date` = date de la dernière mise à jour de la ligne (AAAA-MM-JJ) ;
 du commit du dépôt de documentation (`Programmation/`), les hach de code
 (`FromTo Github`) étant consignés dans la note de passation.
 
-> **Prochain paquet de travail : `1.1` — validation indépendante par capteur.**
-> Contenu : [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md#paquet-1-1) §3, paquet `1.1`.
+> **Prochain paquet de travail : `1.2` — acquisition multi-capteurs.**
+> Contenu : [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md#paquet-1-2) §3, paquet `1.2`.
 > Détail d'implémentation et ordre de lecture : [`Reference_Technique_Etape_1_Capteurs.md`](./Reference_Technique_Etape_1_Capteurs.md#ordre-de-lecture).
+
+**Décision du 2026-11-01 — clôture de `1.1`, jalon `J1` validé.** Validation humaine : les
+bancs se construisent et **chaque capteur a été vérifié qualitativement et individuellement
+sur Teensy 4.1 réelle** (valeurs plausibles, erreurs explicites). En revanche, l'évaluation
+des **bruits statistiques (σ)** et de la **fréquence de mesure maximale** est **reportée** à
+une campagne ultérieure : elle est couverte par le périmètre normatif du paquet `1.3`
+(caractérisation métrologique : bruits, biais, cadence réelle —
+[`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md#paquet-1-3) §3) et sera
+**replanifiée à l'ouverture de `1.3`**. Décision et programme hérité consignés dans
+[`../Passations/C1.1.md`](../Passations/C1.1.md) ; le code du paquet `1.1` reste **non
+commité** dans `FromTo Github` à la date de clôture.
 
 ### Jalons
 
 | Jalon | Évalué après | État | Décision consignée |
 |---|---|---|---|
-| `J1` | `C1.1` | `non atteint` | — |
+| `J1` | `C1.1` | `atteint` (2026-11-01) | `[C1.1](../Passations/C1.1.md)`, section « Décision de clôture » |
 | `J2` | `C1.3` | `non atteint` | — |
 | `J3` | `C2.2` | `non atteint` | — |
 | `J4` | `C3.3` | `non atteint` | — |
@@ -84,8 +95,10 @@ que si la session porte explicitement sur une variante ou un historique.
 | [`Planification_Etapes_Paquets_Jalons.md`](./Planification_Etapes_Paquets_Jalons.md) | Niveaux, identifiants, jalons, règles de progression, gabarit de passation, table d'autorité entre documents | **oui** | début de session |
 | [`Reference_Technique_Globale.md`](./Reference_Technique_Globale.md) | Référentiel technique global : objectifs, paquets, critères, renvois par étape ; organisation du dépôt `FromTo Github` (§10) | **oui** | pour le paquet à exécuter ; §10 avant de créer ou déplacer du code |
 | [`Reference_Technique_Etape_1_Capteurs.md`](./Reference_Technique_Etape_1_Capteurs.md) | Détail de l'étape 1 + contrats d'interface (§7) + squelettes (Annexe C) | **oui** | toute session sur `1.x` |
+| [`Reference_Technique_Etape_2_Kalman.md`](./Reference_Technique_Etape_2_Kalman.md) | Détail de l'étape 2 : noyau `lib/kalman`, `FilterConfig`, types de filtre, blocs d'observation, bancs hôte et cible | **oui** | toute session sur `2.x` |
 | [`Suivi_Valeurs_Et_Sources.md`](./Suivi_Valeurs_Et_Sources.md) | Registre d'état : pont entre valeurs par défaut et valeurs réelles, doutes ouverts et journal des doutes clos | non (état) | avant de coder une valeur `V-nn` ; en fin de paquet pour vérifier les portes de sortie |
 | [`Annexe_Variantes_Et_Historique_Etape_1.md`](./Annexes/Annexe_Variantes_Et_Historique_Etape_1.md) | Variantes écartées et historique des décisions de l'étape 1 | **non — ne pas programmer dessus** | uniquement sur demande explicite |
+| [`Annexe_Variantes_Et_Historique_Etape_2.md`](./Annexes/Annexe_Variantes_Et_Historique_Etape_2.md) | Variantes écartées et historique des décisions de l'étape 2 | **non — ne pas programmer dessus** | uniquement sur demande explicite |
 | [`Annexe_Variantes_Et_Historique_Globale.md`](./Annexes/Annexe_Variantes_Et_Historique_Globale.md) | Variantes écartées et historique du référentiel global | **non — ne pas programmer dessus** | uniquement sur demande explicite |
 | [`Annexe_Archive_Contrats_Interfaces.md`](./Annexes/Annexe_Archive_Contrats_Interfaces.md) | Archive allégée de l'ancien fichier de contrats (copie intégrale dans l'historique Git) | **non — ne pas programmer dessus** | uniquement pour traçabilité |
 
@@ -107,7 +120,7 @@ planification §1) : `Materiel.pdf`,
 `Implementation.pdf`, `Formulations_Kalman.pdf`, `Materiel/Datasheets/`,
 `Elec/Schéma électrique capteurs.pdf`.
 
-`Reference_Technique_Etape_2_Kalman.md` à `Reference_Technique_Etape_6_Validation.md`
+`Reference_Technique_Etape_3_Integration.md` à `Reference_Technique_Etape_6_Validation.md`
 n'existent pas encore : ils sont créés au démarrage du premier paquet de leur étape.
 
 ---
@@ -168,7 +181,7 @@ n'existent pas encore : ils sont créés au démarrage du premier paquet de leur
 
 | Point | Détail | À traiter |
 |---|---|---|
-| Documents d'étape 2 à 6 | `Reference_Technique_Etape_2..6_*.md` non rédigés ; le référentiel global en tient lieu jusque-là, sa section d'étape étant réduite à l'objectif et au renvoi **à la création** de chaque document (référentiel §2.2, règle 7) — y compris les blocs « Organisation du dépôt » des paquets concernés | au démarrage de chaque étape (checklist : référentiel §2.1.1) |
+| Documents d'étape 3 à 6 | `Reference_Technique_Etape_3..6_*.md` non rédigés ; le référentiel global en tient lieu jusque-là, sa section d'étape étant réduite à l'objectif et au renvoi **à la création** de chaque document (référentiel §2.2, règle 7) — y compris les blocs « Organisation du dépôt » des paquets concernés. Étape 2 **couverte** le 2026-11-01 : [`Reference_Technique_Etape_2_Kalman.md`](./Reference_Technique_Etape_2_Kalman.md) et [`Annexe_Variantes_Et_Historique_Etape_2.md`](./Annexes/Annexe_Variantes_Et_Historique_Etape_2.md), blocs « Organisation du dépôt » des paquets `2.1`/`2.2` transférés au §1.7 du document d'étape | au démarrage de chaque étape (checklist : référentiel §2.1.1) |
 
 > L'ancien `Organisation_FromTo_Github.md` a été fusionné dans le référentiel
 > (§10 et blocs « Organisation du dépôt » des paquets) ; sa dette de révision est soldée,
